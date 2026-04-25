@@ -1,0 +1,8 @@
+{
+  "name": "Smart Gardener",
+  "description": "AI-powered plant identification and care management assistant.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}
