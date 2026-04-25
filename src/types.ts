@@ -60,7 +60,6 @@ export interface IdentificationResult {
   species: string;
   commonName: string;
   confidence: number;
-  location?: 'indoor' | 'outdoor';
   health: PlantHealth;
   careSuggestions: Partial<CareSchedule>;
 }

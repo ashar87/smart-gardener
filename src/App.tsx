@@ -131,7 +131,6 @@ function AppContent() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [selectedLocation, setSelectedLocation] = useState<'indoor' | 'outdoor' | null>(null);
 
   // Cloud Sync
   useEffect(() => {
@@ -214,7 +213,6 @@ function AppContent() {
         const result = await identifyPlant(base64);
         console.log("Identification successful", result);
         setAnalysisResult(result);
-        setSelectedLocation(result.location || 'indoor');
         setView('result');
       } catch (error) {
         console.error("Analysis failed", error);
@@ -237,7 +235,6 @@ function AppContent() {
       commonName: analysisResult.commonName,
       image: '', // Will be set after upload
       addedAt: Date.now(),
-      location: selectedLocation || 'indoor',
       healthStatus: analysisResult.health,
       careSchedule: {
         watering: {
@@ -650,22 +647,6 @@ function AppContent() {
                       <div className="text-[10px] uppercase font-bold text-moss/30 mb-1">Sunlight</div>
                       <div className="text-sm font-bold text-stone">{analysisResult.careSuggestions.sunlight}</div>
                     </div>
-                  </div>
-                <div className="space-y-4">
-                  <h3 className="font-serif font-bold text-moss px-1">Plant Location</h3>
-                  <div className="flex gap-4 p-1 bg-moss/5 rounded-2xl border border-moss/10">
-                    <button 
-                      onClick={() => setSelectedLocation('indoor')}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${selectedLocation === 'indoor' ? 'bg-moss text-white shadow-sm' : 'text-moss/40 hover:bg-moss/5'}`}
-                    >
-                      🏠 Indoor
-                    </button>
-                    <button 
-                      onClick={() => setSelectedLocation('outdoor')}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${selectedLocation === 'outdoor' ? 'bg-moss text-white shadow-sm' : 'text-moss/40 hover:bg-moss/5'}`}
-                    >
-                      ☀️ Outdoor
-                    </button>
                   </div>
                 </div>
 

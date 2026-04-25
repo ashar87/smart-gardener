@@ -29,11 +29,6 @@ const RESPONSE_SCHEMA = {
       },
       required: ["status", "assessment", "issues"]
     },
-    location: { 
-      type: Type.STRING, 
-      enum: ["indoor", "outdoor"], 
-      description: "Typical location for this plant. If it can be both, choose the most common one." 
-    },
     careSuggestions: {
       type: Type.OBJECT,
       properties: {
