@@ -41,6 +41,16 @@ const compressImage = (base64: string, maxWidth = 800, quality = 0.6): Promise<s
   });
 };
 
+const LoadingState = () => (
+  <div className="flex flex-col items-center justify-center py-32 text-center">
+    <div className="relative mb-6">
+      <div className="w-16 h-16 border-4 border-moss/10 border-t-moss rounded-full animate-spin" />
+      <Leaf className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-moss/40 animate-pulse" size={24} />
+    </div>
+    <p className="text-stone/50 font-serif italic animate-pulse">Tending to your garden...</p>
+  </div>
+);
+
 // --- Components ---
 
 const Header = ({ title, showBack, onBack, showLogout, onLogout }: { title: string; showBack?: boolean; onBack?: () => void; showLogout?: boolean; onLogout?: () => void }) => (
@@ -120,12 +130,14 @@ function AppContent() {
   const [loadingMessage, setLoadingMessage] = useState('Identifying species...');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // Cloud Sync
   useEffect(() => {
     if (!currentUser) return;
     const unsubscribe = subscribeToPlants(currentUser.uid, (fetchedPlants) => {
       setPlants(fetchedPlants);
+      setIsInitialLoad(false);
       
       // Update selected plant if it exists
       if (selectedPlant) {
@@ -443,7 +455,9 @@ function AppContent() {
                 </div>
               )}
 
-              {plants.length === 0 ? (
+              {isInitialLoad ? (
+                <LoadingState />
+              ) : plants.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <div className="w-24 h-24 bg-[#5A5A40]/5 rounded-full flex items-center justify-center text-[#5A5A40]/20 mb-6">
                     <Leaf size={48} />
@@ -502,11 +516,15 @@ function AppContent() {
 
           {/* ── CALENDAR TAB ── */}
           {view === 'dashboard' && activeTab === 'calendar' && (
-            <CalendarView
-              plants={plants}
-              onWaterPlant={(plantId) => addCareEvent(plantId, 'watering')}
-              onPlantClick={(plant) => { setSelectedPlant(plant); setView('detail'); }}
-            />
+            isInitialLoad ? (
+              <LoadingState />
+            ) : (
+              <CalendarView
+                plants={plants}
+                onWaterPlant={(plantId) => addCareEvent(plantId, 'watering')}
+                onPlantClick={(plant) => { setSelectedPlant(plant); setView('detail'); }}
+              />
+            )
           )}
 
           {/* ── SETTINGS TAB ── */}

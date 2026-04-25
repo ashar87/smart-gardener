@@ -1,20 +1,18 @@
 {
-  "name": "Smart Gardener",
   "short_name": "Gardener",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#F5F5F0",
-  "theme_color": "#5A5A40",
+  "name": "Smart Gardener AI",
   "icons": [
     {
-      "src": "https://picsum.photos/seed/plant/192/192",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "https://picsum.photos/seed/plant/512/512",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#15803D",
+  "background_color": "#FDFBF7",
+  "orientation": "portrait",
+  "description": "Your personal AI assistant for keeping your plants healthy and thriving."
 }
