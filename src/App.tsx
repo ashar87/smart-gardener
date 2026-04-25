@@ -497,16 +497,6 @@ function AppContent() {
                   </div>
                 </div>
               )}
-
-              {/* FAB - Add Plant */}
-              <button
-                id="add-plant-fab"
-                onClick={() => setView('add')}
-                className="fixed bottom-20 right-6 flex items-center gap-2 bg-terracotta text-white px-5 py-3.5 rounded-full shadow-xl shadow-terracotta/30 hover:scale-105 active:scale-95 transition-transform font-bold"
-              >
-                <Plus size={20} />
-                <span className="text-sm">Add Plant</span>
-              </button>
             </motion.div>
           )}
 
@@ -897,7 +887,20 @@ function AppContent() {
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation — only visible on main dashboard screens */}
+      {/* Centred floating Add Plant button — above bottom nav */}
+      {showBottomNav && (
+        <button
+          id="add-plant-fab"
+          aria-label="Add new plant"
+          onClick={() => setView('add')}
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-terracotta text-white px-6 py-3.5 rounded-full shadow-2xl shadow-terracotta/30 hover:scale-105 active:scale-95 transition-transform font-bold text-sm"
+        >
+          <Plus size={20} strokeWidth={2.5} />
+          Add Plant
+        </button>
+      )}
+
+      {/* Bottom Navigation */}
       {showBottomNav && (
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
       )}

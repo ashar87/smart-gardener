@@ -18,7 +18,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     <nav
       id="bottom-nav"
       aria-label="Main navigation"
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-moss/10 safe-area-bottom"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-moss/10"
     >
       <div className="max-w-md mx-auto flex items-center justify-around">
         {tabs.map(({ id, label, Icon }) => {
@@ -30,10 +30,8 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
               aria-label={label}
               aria-selected={isActive}
               onClick={() => onTabChange(id)}
-              className={`flex flex-col items-center justify-center gap-1 py-3 px-6 min-w-[80px] transition-all duration-200 ${
-                isActive
-                  ? 'text-moss scale-105'
-                  : 'text-stone/40 hover:text-stone/70'
+              className={`relative flex flex-col items-center justify-center gap-1 py-3 flex-1 transition-all duration-200 ${
+                isActive ? 'text-moss' : 'text-stone/40 hover:text-stone/70'
               }`}
             >
               <Icon
@@ -48,7 +46,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                 {label}
               </span>
               {isActive && (
-                <span className="absolute top-0 w-8 h-[2px] rounded-full bg-moss" />
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2.5px] rounded-full bg-moss" />
               )}
             </button>
           );
