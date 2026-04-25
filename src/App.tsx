@@ -5,13 +5,17 @@
 
 import { useState, useEffect, ChangeEvent, MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Leaf, Calendar, Camera, Info, Check, Trash2, Home, Search, HeartPulse, Droplets, Sprout, Scissors, Bell, BellOff, History, Sparkles, ArrowLeftRight, Image as ImageIcon, LogOut, ArrowLeft } from 'lucide-react';
+import { Plus, Leaf, Calendar, Camera, Info, Check, Trash2, HeartPulse, Droplets, Sprout, Scissors, Bell, BellOff, History, Sparkles, ArrowLeftRight, Image as ImageIcon, ArrowLeft } from 'lucide-react';
 import { Plant, IdentificationResult, CareEvent, GrowthMilestone } from './types';
 import { identifyPlant, analyzeGrowth } from './services/geminiService';
 import { requestNotificationPermission, scheduleWateringNotification, cancelWateringNotification } from './services/notificationService';
 import { uploadPlantImage, syncPlantToCloud, deletePlantFromCloud, subscribeToPlants } from './services/cloudSync';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Onboarding from './components/Onboarding';
+import BottomNav, { Tab } from './components/BottomNav';
+import CalendarView from './components/CalendarView';
+import SettingsView from './components/SettingsView';
+import { filterPlantsByLocation } from './utils/calendarUtils';
 
 const compressImage = (base64: string, maxWidth = 800, quality = 0.6): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -108,6 +112,8 @@ function AppContent() {
   const { currentUser, logout } = useAuth();
   const [plants, setPlants] = useState<Plant[]>([]);
   const [view, setView] = useState<'dashboard' | 'add' | 'analyzing' | 'result' | 'detail'>('dashboard');
+  const [activeTab, setActiveTab] = useState<Tab>('garden');
+  const [locationFilter, setLocationFilter] = useState<'all' | 'indoor' | 'outdoor'>('all');
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<IdentificationResult | null>(null);
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
@@ -374,29 +380,69 @@ function AppContent() {
     reader.readAsDataURL(file);
   };
 
+  // Navigate back from detail/add to garden tab
+  const handleBack = () => {
+    setView('dashboard');
+    setActiveTab('garden');
+  };
+
   if (!currentUser) {
     return <Onboarding />;
   }
 
+  // Determine which header title to show
+  const headerTitle =
+    view === 'detail' ? (selectedPlant?.commonName || 'Plant Detail') :
+    view === 'add' || view === 'analyzing' || view === 'result' ? 'Add Plant' :
+    activeTab === 'garden' ? 'My Garden' :
+    activeTab === 'calendar' ? 'Watering Schedule' :
+    'Settings';
+
+  const showBack = view !== 'dashboard' || activeTab !== 'garden';
+  const showBottomNav = view === 'dashboard';
+
+  // Filtered plants for the garden grid
+  const filteredPlants = filterPlantsByLocation(plants, locationFilter);
+
   return (
     <div className="min-h-screen bg-[#f5f5f0] font-sans text-[#1a1a1a] pb-24">
-      <Header 
-        title={view === 'dashboard' ? 'My Garden' : 'Smart Gardener'} 
-        showBack={view !== 'dashboard'} 
-        onBack={() => setView('dashboard')} 
-        showLogout={view === 'dashboard'}
-        onLogout={logout}
+      <Header
+        title={headerTitle}
+        showBack={showBack && (view !== 'dashboard')}
+        onBack={handleBack}
+        showLogout={false}
       />
 
       <main className="max-w-md mx-auto px-6 pt-6">
         <AnimatePresence mode="wait">
-          {view === 'dashboard' && (
-            <motion.div 
+          {/* ── GARDEN TAB ── */}
+          {view === 'dashboard' && activeTab === 'garden' && (
+            <motion.div
               key="dashboard"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
+              {/* Location filter pills */}
+              {plants.length > 0 && (
+                <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+                  {(['all', 'indoor', 'outdoor'] as const).map((f) => (
+                    <button
+                      key={f}
+                      id={`filter-${f}`}
+                      onClick={() => setLocationFilter(f)}
+                      className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border transition-all ${
+                        locationFilter === f
+                          ? 'bg-moss text-white border-moss shadow-sm'
+                          : 'bg-white text-stone/50 border-stone/10 hover:border-moss/30'
+                      }`}
+                    >
+                      {f === 'all' ? '🌿 All' : f === 'indoor' ? '🏠 Indoor' : '☀️ Outdoor'}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {plants.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <div className="w-24 h-24 bg-[#5A5A40]/5 rounded-full flex items-center justify-center text-[#5A5A40]/20 mb-6">
@@ -404,21 +450,21 @@ function AppContent() {
                   </div>
                   <h2 className="text-xl font-serif font-medium text-[#5A5A40]">Your garden is empty</h2>
                   <p className="mt-2 text-[#5A5A40]/60 leading-relaxed mb-6">
-                    Start by identifying your first plant to get care reminders.
+                    Tap the button below to identify and add your first plant.
                   </p>
-                  
-                  <button 
-                    onClick={handleNotificationToggle}
-                    className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-moss/60 hover:text-moss transition-colors"
-                  >
-                    {notificationsEnabled ? <Bell size={14} /> : <BellOff size={14} />}
-                    {notificationsEnabled ? 'Reminders On' : 'Reminders Off'}
-                  </button>
+                </div>
+              ) : filteredPlants.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <p className="text-stone/40 font-serif italic">No {locationFilter} plants yet</p>
+                  <button
+                    onClick={() => setLocationFilter('all')}
+                    className="mt-3 text-xs text-moss underline"
+                  >Show all plants</button>
                 </div>
               ) : (
                 <div className="space-y-6">
                   {!notificationsEnabled && plants.length > 0 && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="bg-moss text-white p-4 rounded-2xl flex items-center justify-between shadow-lg mx-2"
@@ -430,7 +476,7 @@ function AppContent() {
                           <div className="text-[10px] opacity-80">Enable to get watering alerts</div>
                         </div>
                       </div>
-                      <button 
+                      <button
                         onClick={handleNotificationToggle}
                         className="bg-white text-moss px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-transform active:scale-95"
                       >
@@ -438,40 +484,47 @@ function AppContent() {
                       </button>
                     </motion.div>
                   )}
-                  
-                  <div className="flex items-center justify-between px-2">
-                    <h2 className="font-serif font-bold text-moss text-xl">My Collection</h2>
-                    {notificationsEnabled && (
-                      <button 
-                        onClick={handleNotificationToggle}
-                        className="p-2 rounded-xl border border-moss/10 bg-moss/5 text-moss transition-all"
-                        title="Disable Notifications"
-                      >
-                        <Bell size={20} />
-                      </button>
-                    )}
-                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
-                    {plants.map(plant => (
-                      <PlantCard 
-                        key={plant.id} 
-                        plant={plant} 
-                        onClick={() => { setSelectedPlant(plant); setView('detail'); }} 
+                    {filteredPlants.map(plant => (
+                      <PlantCard
+                        key={plant.id}
+                        plant={plant}
+                        onClick={() => { setSelectedPlant(plant); setView('detail'); }}
                         onDelete={(e) => deletePlant(plant.id, e)}
                       />
                     ))}
                   </div>
                 </div>
               )}
-              
-              <button 
+
+              {/* FAB - Add Plant */}
+              <button
+                id="add-plant-fab"
                 onClick={() => setView('add')}
-                className="fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-terracotta text-white px-8 py-4 rounded-full shadow-xl shadow-terracotta/30 hover:scale-105 active:scale-95 transition-transform font-bold uppercase tracking-wide"
+                className="fixed bottom-20 right-6 flex items-center gap-2 bg-terracotta text-white px-5 py-3.5 rounded-full shadow-xl shadow-terracotta/30 hover:scale-105 active:scale-95 transition-transform font-bold"
               >
-                <Plus size={24} />
-                <span className="tracking-tight">Add New Plant</span>
+                <Plus size={20} />
+                <span className="text-sm">Add Plant</span>
               </button>
             </motion.div>
+          )}
+
+          {/* ── CALENDAR TAB ── */}
+          {view === 'dashboard' && activeTab === 'calendar' && (
+            <CalendarView
+              plants={plants}
+              onWaterPlant={(plantId) => addCareEvent(plantId, 'watering')}
+              onPlantClick={(plant) => { setSelectedPlant(plant); setView('detail'); }}
+            />
+          )}
+
+          {/* ── SETTINGS TAB ── */}
+          {view === 'dashboard' && activeTab === 'settings' && (
+            <SettingsView
+              notificationsEnabled={notificationsEnabled}
+              onToggleNotifications={handleNotificationToggle}
+            />
           )}
 
           {view === 'add' && (
@@ -843,6 +896,11 @@ function AppContent() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Bottom Navigation — only visible on main dashboard screens */}
+      {showBottomNav && (
+        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      )}
     </div>
   );
 }

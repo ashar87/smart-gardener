@@ -9,6 +9,7 @@ export interface Plant {
   commonName: string;
   image: string;
   addedAt: number;
+  location?: 'indoor' | 'outdoor';
   healthStatus: PlantHealth;
   careSchedule: CareSchedule;
   history: CareEvent[];
