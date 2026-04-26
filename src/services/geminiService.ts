@@ -29,6 +29,11 @@ const RESPONSE_SCHEMA = {
       },
       required: ["status", "assessment", "issues"]
     },
+    location: {
+      type: Type.STRING,
+      enum: ["indoor", "outdoor"],
+      description: "Whether this plant is typically kept indoors or outdoors. If it can be both, choose the most common environment for this species."
+    },
     careSuggestions: {
       type: Type.OBJECT,
       properties: {
@@ -46,7 +51,7 @@ const RESPONSE_SCHEMA = {
       required: ["watering", "sunlight"]
     }
   },
-  required: ["species", "commonName", "confidence", "health", "careSuggestions"]
+  required: ["species", "commonName", "confidence", "location", "health", "careSuggestions"]
 };
 
 const GROWTH_SCHEMA = {
@@ -77,14 +82,14 @@ export async function identifyPlant(base64Image: string): Promise<Identification
             }
           },
           {
-            text: "Identify this plant and assess its health. Provide detailed care instructions in JSON format."
+            text: "Identify this plant, assess its health, and predict whether it is typically an indoor or outdoor plant. Provide detailed care instructions in JSON format."
           }
         ]
       },
       config: {
         responseMimeType: "application/json",
         responseSchema: RESPONSE_SCHEMA,
-        systemInstruction: "You are an expert botanist and computer vision plant identification engine. Always return valid JSON."
+        systemInstruction: "You are an expert botanist and computer vision plant identification engine. Always return valid JSON. For the location field, carefully consider whether this species thrives indoors or outdoors in typical home environments."
       }
     });
 

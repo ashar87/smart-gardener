@@ -131,6 +131,11 @@ function AppContent() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [selectedLocation, setSelectedLocation] = useState<'indoor' | 'outdoor'>('indoor');
+  const [manualOverride, setManualOverride] = useState<{ commonName: string; species: string } | null>(null);
+  const [showOverridePanel, setShowOverridePanel] = useState(false);
+  const [overrideCommonName, setOverrideCommonName] = useState('');
+  const [overrideSpecies, setOverrideSpecies] = useState('');
 
   // Cloud Sync
   useEffect(() => {
@@ -213,6 +218,11 @@ function AppContent() {
         const result = await identifyPlant(base64);
         console.log("Identification successful", result);
         setAnalysisResult(result);
+        setSelectedLocation(result.location ?? 'indoor');
+        setManualOverride(null);
+        setShowOverridePanel(false);
+        setOverrideCommonName('');
+        setOverrideSpecies('');
         setView('result');
       } catch (error) {
         console.error("Analysis failed", error);
@@ -231,10 +241,11 @@ function AppContent() {
 
     const newPlant: Plant = {
       id: Math.random().toString(36).substring(7),
-      species: analysisResult.species,
-      commonName: analysisResult.commonName,
+      species: manualOverride?.species || analysisResult.species,
+      commonName: manualOverride?.commonName || analysisResult.commonName,
       image: '', // Will be set after upload
       addedAt: Date.now(),
+      location: selectedLocation,
       healthStatus: analysisResult.health,
       careSchedule: {
         watering: {
@@ -263,10 +274,22 @@ function AppContent() {
       setView('dashboard');
       setCurrentImage(null);
       setAnalysisResult(null);
+      setManualOverride(null);
     } catch (e) {
       console.error(e);
       alert("Failed to save plant. Make sure Firestore is enabled.");
       setView('dashboard');
+    }
+  };
+
+  const togglePlantLocation = async (newLocation: 'indoor' | 'outdoor') => {
+    if (!selectedPlant || !currentUser) return;
+    const updated = { ...selectedPlant, location: newLocation };
+    try {
+      await syncPlantToCloud(currentUser.uid, updated);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update location.');
     }
   };
 
@@ -650,6 +673,92 @@ function AppContent() {
                   </div>
                 </div>
 
+                {/* ── Location Toggle ── */}
+                <div className="space-y-3">
+                  <h3 className="font-serif font-bold text-moss px-1">Where will this plant live?</h3>
+                  <div className="flex gap-3 p-1 bg-moss/5 rounded-2xl border border-moss/10">
+                    <button
+                      onClick={() => setSelectedLocation('indoor')}
+                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${selectedLocation === 'indoor' ? 'bg-moss text-white shadow-sm' : 'text-stone/40 hover:bg-moss/5'}`}
+                    >
+                      🏠 Indoor
+                    </button>
+                    <button
+                      onClick={() => setSelectedLocation('outdoor')}
+                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${selectedLocation === 'outdoor' ? 'bg-moss text-white shadow-sm' : 'text-stone/40 hover:bg-moss/5'}`}
+                    >
+                      ☀️ Outdoor
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-stone/40 text-center px-2">
+                    AI predicted: <span className="font-bold text-moss">{analysisResult.location === 'indoor' ? '🏠 Indoor' : '☀️ Outdoor'}</span> — tap to override
+                  </p>
+                </div>
+
+                {/* ── Manual Name Override ── */}
+                <div className="bg-clay/20 rounded-2xl border border-moss/10 overflow-hidden">
+                  <button
+                    onClick={() => setShowOverridePanel(v => !v)}
+                    className="w-full flex items-center justify-between px-5 py-4 text-left"
+                  >
+                    <div>
+                      <p className="text-xs font-bold text-stone">🤔 Not "{manualOverride?.commonName || analysisResult.commonName}"?</p>
+                      <p className="text-[10px] text-stone/40">Search and correct the plant name</p>
+                    </div>
+                    <span className="text-moss text-xs font-bold">{showOverridePanel ? '▲ Close' : '▼ Fix it'}</span>
+                  </button>
+                  {showOverridePanel && (
+                    <div className="px-5 pb-5 space-y-3 border-t border-moss/10">
+                      <a
+                        href={`https://www.google.com/search?q=${encodeURIComponent(analysisResult.commonName + ' plant identification')}&tbm=isch`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 flex items-center justify-center gap-2 w-full bg-white border border-moss/20 py-2.5 rounded-xl text-xs font-bold text-moss hover:bg-moss/5 transition-colors"
+                      >
+                        🔍 Search Google Images
+                      </a>
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          placeholder="Common name (e.g. Fiddle Leaf Fig)"
+                          value={overrideCommonName}
+                          onChange={e => setOverrideCommonName(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-moss/20 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-moss/30"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Species (optional, e.g. Ficus lyrata)"
+                          value={overrideSpecies}
+                          onChange={e => setOverrideSpecies(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-moss/20 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-moss/30"
+                        />
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (!overrideCommonName.trim()) return;
+                          setManualOverride({
+                            commonName: overrideCommonName.trim(),
+                            species: overrideSpecies.trim() || analysisResult.species,
+                          });
+                          setShowOverridePanel(false);
+                        }}
+                        className="w-full bg-moss text-white py-3 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
+                        disabled={!overrideCommonName.trim()}
+                      >
+                        ✓ Use This Name
+                      </button>
+                      {manualOverride && (
+                        <button
+                          onClick={() => setManualOverride(null)}
+                          className="w-full text-center text-[10px] text-stone/40 underline"
+                        >
+                          Revert to AI name
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <button 
                   onClick={confirmAddPlant}
                   className="w-full bg-terracotta text-white py-4 rounded-2xl font-bold uppercase tracking-wide shadow-xl shadow-terracotta/20 flex items-center justify-center gap-3"
@@ -767,7 +876,26 @@ function AppContent() {
                     </div>
                     
                     <div className="bg-white p-6 rounded-[32px] space-y-6 border border-moss/5 shadow-sm">
-                      <div className="flex gap-4">
+                      {/* Location toggle */}
+                      <div>
+                        <div className="text-[10px] uppercase font-bold text-stone/30 mb-2 tracking-wider">📍 Location</div>
+                        <div className="flex gap-2 p-1 bg-moss/5 rounded-xl border border-moss/10">
+                          <button
+                            onClick={() => togglePlantLocation('indoor')}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${selectedPlant.location === 'indoor' || !selectedPlant.location ? 'bg-moss text-white shadow-sm' : 'text-stone/40'}`}
+                          >
+                            🏠 Indoor
+                          </button>
+                          <button
+                            onClick={() => togglePlantLocation('outdoor')}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${selectedPlant.location === 'outdoor' ? 'bg-moss text-white shadow-sm' : 'text-stone/40'}`}
+                          >
+                            ☀️ Outdoor
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-4 border-t border-moss/5 pt-6">
                         <div className="w-10 h-10 bg-[#E8F2E8] rounded-2xl flex items-center justify-center shrink-0">
                           <span className="text-moss">💧</span>
                         </div>

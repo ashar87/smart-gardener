@@ -46,6 +46,7 @@ const MOCK_IDENTIFICATION = {
   species: 'Monstera deliciosa',
   commonName: 'Swiss Cheese Plant',
   confidence: 0.97,
+  location: 'indoor' as const,
   health: { status: 'healthy', assessment: 'Vibrant and well-hydrated.', issues: [] },
   careSuggestions: {
     watering: { frequency: 'Every 7 days' },
@@ -74,6 +75,7 @@ describe('identifyPlant', () => {
     expect(result.species).toBe('Monstera deliciosa');
     expect(result.commonName).toBe('Swiss Cheese Plant');
     expect(result.confidence).toBe(0.97);
+    expect(result.location).toBe('indoor');
     expect(result.health.status).toBe('healthy');
     expect(result.health.issues).toHaveLength(0);
     expect(result.careSuggestions.watering?.frequency).toBe('Every 7 days');
