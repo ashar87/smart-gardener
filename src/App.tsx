@@ -5,9 +5,9 @@
 
 import { useState, useEffect, ChangeEvent, MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Leaf, Calendar, Camera, Info, Check, Trash2, HeartPulse, Droplets, Sprout, Scissors, Bell, BellOff, History, Sparkles, ArrowLeftRight, Image as ImageIcon, ArrowLeft } from 'lucide-react';
+import { Plus, Leaf, Calendar, Camera, Info, Check, Trash2, HeartPulse, Droplets, Sprout, Scissors, Bell, BellOff, History, Sparkles, ArrowLeftRight, Image as ImageIcon, ArrowLeft, LogOut } from 'lucide-react';
 import { Plant, IdentificationResult, CareEvent, GrowthMilestone } from './types';
-import { identifyPlant, analyzeGrowth } from './services/geminiService';
+import { identifyPlant, analyzeGrowth, reanalyzeWithCorrectName } from './services/geminiService';
 import { requestNotificationPermission, scheduleWateringNotification, cancelWateringNotification } from './services/notificationService';
 import { uploadPlantImage, syncPlantToCloud, deletePlantFromCloud, subscribeToPlants } from './services/cloudSync';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -136,6 +136,7 @@ function AppContent() {
   const [showOverridePanel, setShowOverridePanel] = useState(false);
   const [overrideCommonName, setOverrideCommonName] = useState('');
   const [overrideSpecies, setOverrideSpecies] = useState('');
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
 
   // Cloud Sync
   useEffect(() => {
@@ -734,18 +735,34 @@ function AppContent() {
                         />
                       </div>
                       <button
-                        onClick={() => {
-                          if (!overrideCommonName.trim()) return;
-                          setManualOverride({
-                            commonName: overrideCommonName.trim(),
-                            species: overrideSpecies.trim() || analysisResult.species,
-                          });
-                          setShowOverridePanel(false);
+                        onClick={async () => {
+                          const name = overrideCommonName.trim();
+                          const species = overrideSpecies.trim() || analysisResult.species;
+                          if (!name || !currentImage) return;
+                          setIsReanalyzing(true);
+                          try {
+                            const updated = await reanalyzeWithCorrectName(currentImage, name, species);
+                            setAnalysisResult(updated);
+                            setManualOverride({ commonName: name, species: updated.species });
+                            setSelectedLocation(updated.location ?? selectedLocation);
+                          } catch (err) {
+                            console.error('Reanalysis failed', err);
+                            // Fall back to cosmetic-only override if Gemini fails
+                            setManualOverride({ commonName: name, species });
+                          } finally {
+                            setIsReanalyzing(false);
+                            setShowOverridePanel(false);
+                          }
                         }}
-                        className="w-full bg-moss text-white py-3 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40"
-                        disabled={!overrideCommonName.trim()}
+                        className="w-full bg-moss text-white py-3 rounded-xl text-xs font-bold uppercase tracking-wider disabled:opacity-40 flex items-center justify-center gap-2"
+                        disabled={!overrideCommonName.trim() || isReanalyzing}
                       >
-                        ✓ Use This Name
+                        {isReanalyzing ? (
+                          <>
+                            <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                            Re-analysing care schedule...
+                          </>
+                        ) : '✓ Use This Name'}
                       </button>
                       {manualOverride && (
                         <button

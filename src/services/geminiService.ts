@@ -105,6 +105,54 @@ export async function identifyPlant(base64Image: string): Promise<Identification
   }
 }
 
+export async function reanalyzeWithCorrectName(
+  base64Image: string,
+  commonName: string,
+  species: string
+): Promise<IdentificationResult> {
+  const model = "gemini-3-flash-preview";
+  const ai = getAiClient();
+
+  console.log(`Calling Gemini (${model}) for care reanalysis with confirmed name: ${commonName}...`);
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: base64Image.split(',')[1] || base64Image,
+              mimeType: "image/jpeg"
+            }
+          },
+          {
+            text: `The user has confirmed this plant is "${commonName}" (${species || commonName}). Do NOT re-identify the species. Use the image only to assess the plant's current health condition. Return accurate care instructions for this confirmed species.`
+          }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: RESPONSE_SCHEMA,
+        systemInstruction: `You are an expert botanist. The species has already been confirmed by the user as "${commonName}" (${species || commonName}). Do NOT re-identify or override this. Your job is to: (1) assess the health of the plant shown in the photo, (2) return accurate care instructions specific to ${commonName}. Always populate the species and commonName fields with the confirmed values provided.`
+      }
+    });
+
+    if (!response.text) {
+      throw new Error("AI returned an empty response.");
+    }
+
+    const rawResult = JSON.parse(response.text) as IdentificationResult;
+    // Enforce the user's confirmed name regardless of what the model returns
+    rawResult.commonName = commonName;
+    rawResult.species = species || rawResult.species;
+    return rawResult;
+  } catch (error) {
+    console.error("Gemini API Error (Reanalysis):", error);
+    throw error;
+  }
+}
+
 export async function analyzeGrowth(newImage: string, pastImages: string[]): Promise<any> {
   const model = "gemini-3-flash-preview";
   const ai = getAiClient();
