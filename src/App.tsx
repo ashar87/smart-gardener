@@ -137,6 +137,8 @@ function AppContent() {
   const [overrideCommonName, setOverrideCommonName] = useState('');
   const [overrideSpecies, setOverrideSpecies] = useState('');
   const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [reanalyzedName, setReanalyzedName] = useState<string | null>(null);
+  const [showReanalyzedToast, setShowReanalyzedToast] = useState(false);
 
   // Cloud Sync
   useEffect(() => {
@@ -449,6 +451,21 @@ function AppContent() {
         showLogout={false}
       />
 
+      <AnimatePresence>
+        {showReanalyzedToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            transition={{ duration: 0.25 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-moss text-white text-xs font-bold px-5 py-3 rounded-full shadow-lg shadow-moss/30 whitespace-nowrap"
+          >
+            <Sparkles size={13} />
+            Care schedule updated for {reanalyzedName}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <main className="max-w-md mx-auto px-6 pt-6">
         <AnimatePresence mode="wait">
           {/* ── GARDEN TAB ── */}
@@ -628,12 +645,42 @@ function AppContent() {
               <div className="space-y-6">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-moss/40">AI Result</span>
+                    <AnimatePresence mode="wait">
+                      {reanalyzedName ? (
+                        <motion.span
+                          key="updated"
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="text-[10px] font-bold uppercase tracking-widest text-moss flex items-center gap-1"
+                        >
+                          <Sparkles size={10} /> Updated Analysis
+                        </motion.span>
+                      ) : (
+                        <motion.span
+                          key="original"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="text-[10px] font-bold uppercase tracking-widest text-moss/40"
+                        >
+                          AI Result
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
                     <span className="text-[10px] font-bold uppercase tracking-widest text-green-600 flex items-center gap-1">
                       <Check size={12} /> {Math.round(analysisResult.confidence * 100)}% Match
                     </span>
                   </div>
-                  <h2 className="text-3xl font-serif font-bold text-stone">{analysisResult.commonName}</h2>
+                  <AnimatePresence mode="wait">
+                    <motion.h2
+                      key={analysisResult.commonName}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className="text-3xl font-serif font-bold text-stone"
+                    >
+                      {analysisResult.commonName}
+                    </motion.h2>
+                  </AnimatePresence>
                   <p className="text-stone/60 italic font-serif">{analysisResult.species}</p>
                 </div>
 
@@ -660,7 +707,13 @@ function AppContent() {
 
                 <div className="space-y-4">
                   <h3 className="font-serif font-bold text-moss px-1">Care Plan</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                  <motion.div
+                    key={analysisResult.commonName}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.05 }}
+                    className="grid grid-cols-2 gap-4"
+                  >
                     <div className="bg-clay/30 p-4 rounded-2xl border border-moss/5">
                       <div className="text-moss mb-2"><Calendar size={20} /></div>
                       <div className="text-[10px] uppercase font-bold text-moss/30 mb-1">Watering</div>
@@ -671,7 +724,7 @@ function AppContent() {
                       <div className="text-[10px] uppercase font-bold text-moss/30 mb-1">Sunlight</div>
                       <div className="text-sm font-bold text-stone">{analysisResult.careSuggestions.sunlight}</div>
                     </div>
-                  </div>
+                  </motion.div>
                 </div>
 
                 {/* ── Location Toggle ── */}
@@ -745,10 +798,15 @@ function AppContent() {
                             setAnalysisResult(updated);
                             setManualOverride({ commonName: name, species: updated.species });
                             setSelectedLocation(updated.location ?? selectedLocation);
+                            setReanalyzedName(name);
+                            setShowReanalyzedToast(true);
+                            setTimeout(() => setShowReanalyzedToast(false), 3500);
                           } catch (err) {
                             console.error('Reanalysis failed', err);
-                            // Fall back to cosmetic-only override if Gemini fails
                             setManualOverride({ commonName: name, species });
+                            setReanalyzedName(name);
+                            setShowReanalyzedToast(true);
+                            setTimeout(() => setShowReanalyzedToast(false), 3500);
                           } finally {
                             setIsReanalyzing(false);
                             setShowOverridePanel(false);
