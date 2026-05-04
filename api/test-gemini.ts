@@ -1,14 +1,19 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { callGemini, MODEL } from "./_gemini";
-
-export default async function handler(_req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   try {
-    const reply = await callGemini(MODEL, {
-      contents: [{ role: "user", parts: [{ text: "Reply with just the word: ok" }] }],
+    const key = process.env.GEMINI_API_KEY || "";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: "Reply with just the word: ok" }] }],
+      }),
     });
-    return res.json({ success: true, reply });
+
+    const data = await response.json();
+    return res.json({ success: response.ok, status: response.status, data });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return res.status(500).json({ success: false, error: msg });
+    return res.status(500).json({ success: false, error: String(error) });
   }
 }
