@@ -13,17 +13,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const ai = getAi();
 
+  const mimeMatch = image.match(/^data:([^;]+);base64,/);
+  const mimeType = (mimeMatch?.[1] as "image/jpeg" | "image/png" | "image/webp") ?? "image/jpeg";
+  const imageData = image.split(",")[1] || image;
+
   try {
     const response = await ai.models.generateContent({
       model: MODEL,
-      contents: {
-        parts: [
-          { inlineData: { data: image.split(",")[1] || image, mimeType: "image/jpeg" } },
-          {
-            text: `The user has confirmed this plant is "${commonName}" (${species || commonName}). Do NOT re-identify the species. Use the image only to assess health and return accurate care instructions for this confirmed species.`,
-          },
-        ],
-      },
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { data: imageData, mimeType } },
+            {
+              text: `The user has confirmed this plant is "${commonName}" (${species || commonName}). Do NOT re-identify the species. Use the image only to assess health and return accurate care instructions for this confirmed species.`,
+            },
+          ],
+        },
+      ],
       config: {
         responseMimeType: "application/json",
         responseSchema: RESPONSE_SCHEMA,

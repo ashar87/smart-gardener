@@ -13,22 +13,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const ai = getAi();
   const imagesToCompare = [...(pastImages || []).slice(-3), newImage];
 
-  const parts: object[] = imagesToCompare.flatMap((img: string, i: number) => [
-    { inlineData: { data: img.split(",")[1] || img, mimeType: "image/jpeg" } },
-    { text: i === imagesToCompare.length - 1 ? "Current photo" : `Previous photo ${i + 1}` },
-  ]);
+  const parts: object[] = imagesToCompare.flatMap((img: string, i: number) => {
+    const mimeMatch = img.match(/^data:([^;]+);base64,/);
+    const mimeType = (mimeMatch?.[1] as "image/jpeg" | "image/png" | "image/webp") ?? "image/jpeg";
+    return [
+      { inlineData: { data: img.split(",")[1] || img, mimeType } },
+      { text: i === imagesToCompare.length - 1 ? "Current photo" : `Previous photo ${i + 1}` },
+    ];
+  });
 
   try {
     const response = await ai.models.generateContent({
       model: MODEL,
-      contents: {
-        parts: [
-          ...parts,
-          {
-            text: "Analyze growth progress. Compare the 'Current photo' with 'Previous photo(s)'. Detect changes in size, leaf count, and health.",
-          },
-        ],
-      },
+      contents: [
+        {
+          role: "user",
+          parts: [
+            ...parts,
+            {
+              text: "Analyze growth progress. Compare the 'Current photo' with 'Previous photo(s)'. Detect changes in size, leaf count, and health.",
+            },
+          ],
+        },
+      ],
       config: {
         responseMimeType: "application/json",
         responseSchema: GROWTH_SCHEMA,

@@ -10,18 +10,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const ai = getAi();
   const maxAttempts = 3;
 
+  const mimeMatch = image.match(/^data:([^;]+);base64,/);
+  const mimeType = (mimeMatch?.[1] as "image/jpeg" | "image/png" | "image/webp") ?? "image/jpeg";
+  const imageData = image.split(",")[1] || image;
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const response = await ai.models.generateContent({
         model: MODEL,
-        contents: {
-          parts: [
-            { inlineData: { data: image.split(",")[1] || image, mimeType: "image/jpeg" } },
-            {
-              text: "Identify this plant, assess its health, and predict whether it is typically an indoor or outdoor plant. For fertilizer and pruning, provide instructions, frequency in days, and active months (1-12, Northern Hemisphere).",
-            },
-          ],
-        },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { data: imageData, mimeType } },
+              {
+                text: "Identify this plant, assess its health, and predict whether it is typically an indoor or outdoor plant. For fertilizer and pruning, provide instructions, frequency in days, and active months (1-12, Northern Hemisphere).",
+              },
+            ],
+          },
+        ],
         config: {
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
