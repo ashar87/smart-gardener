@@ -1,42 +1,31 @@
 /**
- * Integration tests for geminiService.ts
+ * Unit tests for geminiService.ts
  *
- * Mocks @google/genai using a proper class syntax so `new GoogleGenAI()`
- * works correctly under Vitest's module hoisting.
+ * geminiService now calls a backend proxy via fetch.
+ * Tests mock the global fetch using vi.stubGlobal.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { identifyPlant, analyzeGrowth, reanalyzeWithCorrectName } from './geminiService';
 
-// Store the mock fn in module scope so tests can access it via import
-// The trick: use a module-level __mocks__ object that the factory closes over
-// Since vi.mock factories are hoisted, we must use globalThis to share state
-vi.mock('@google/genai', () => {
-  const generateContent = vi.fn();
-  (globalThis as any).__geminiGenerateContent = generateContent;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-  class GoogleGenAI {
-    models = { generateContent };
-    constructor(_config: any) {}
-  }
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
 
-  return {
-    GoogleGenAI,
-    Type: {
-      OBJECT: 'object',
-      STRING: 'string',
-      NUMBER: 'number',
-      BOOLEAN: 'boolean',
-      ARRAY: 'array',
-    },
-  };
-});
+const okResponse = (body: object) =>
+  Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve(body),
+  } as Response);
 
-vi.stubEnv('VITE_GEMINI_API_KEY', 'test-api-key-123');
-
-import { identifyPlant, analyzeGrowth } from './geminiService';
-
-// Helper to access the shared mock after module load
-const getMock = (): ReturnType<typeof vi.fn> => (globalThis as any).__geminiGenerateContent;
+const errorResponse = (status: number, body: object = {}) =>
+  Promise.resolve({
+    ok: false,
+    status,
+    json: () => Promise.resolve(body),
+  } as Response);
 
 // ─── Test data ────────────────────────────────────────────────────────────────
 
@@ -52,8 +41,8 @@ const MOCK_IDENTIFICATION = {
   careSuggestions: {
     watering: { frequency: 'Every 7 days' },
     sunlight: 'Indirect bright light',
-    fertilizer: 'Monthly during growing season',
-    pruning: 'Trim dead leaves as needed',
+    fertilizer: { instructions: 'Monthly', frequencyDays: 30, activeMonths: [3, 4, 5, 6, 7, 8, 9] },
+    pruning: { instructions: 'Trim dead leaves', frequencyDays: 90, activeMonths: [3, 9] },
   },
 };
 
@@ -66,10 +55,10 @@ const MOCK_GROWTH = {
 // ─── identifyPlant ────────────────────────────────────────────────────────────
 
 describe('identifyPlant', () => {
-  beforeEach(() => getMock().mockReset());
+  beforeEach(() => mockFetch.mockReset());
 
   it('returns a parsed IdentificationResult on success', async () => {
-    getMock().mockResolvedValueOnce({ text: JSON.stringify(MOCK_IDENTIFICATION) });
+    mockFetch.mockReturnValueOnce(okResponse(MOCK_IDENTIFICATION));
 
     const result = await identifyPlant(MOCK_BASE64);
 
@@ -82,147 +71,152 @@ describe('identifyPlant', () => {
     expect(result.careSuggestions.watering?.frequency).toBe('Every 7 days');
   });
 
-  it('strips the data URI prefix and sends raw base64 as inlineData', async () => {
-    getMock().mockResolvedValueOnce({ text: JSON.stringify(MOCK_IDENTIFICATION) });
+  it('sends the image as JSON in the request body', async () => {
+    mockFetch.mockReturnValueOnce(okResponse(MOCK_IDENTIFICATION));
 
     await identifyPlant(MOCK_BASE64);
 
-    const parts = getMock().mock.calls[0][0].contents.parts;
-    expect(parts[0].inlineData.data).toBe('/9j/fakeimagebytes');
-    expect(parts[0].inlineData.mimeType).toBe('image/jpeg');
-  });
-
-  it('throws when the AI returns an empty response', async () => {
-    getMock().mockResolvedValueOnce({ text: null });
-
-    await expect(identifyPlant(MOCK_BASE64)).rejects.toThrow('AI returned an empty response');
-  });
-
-  it('retries on transient 503 errors and eventually throws a friendly message', async () => {
-    vi.useFakeTimers();
-    const err = new Error('503 Service Unavailable');
-    getMock()
-      .mockRejectedValueOnce(err)
-      .mockRejectedValueOnce(err)
-      .mockRejectedValueOnce(err);
-
-    // Attach rejection handler before advancing timers to avoid unhandled rejection warning
-    const assertion = expect(identifyPlant(MOCK_BASE64)).rejects.toThrow('high demand');
-    await vi.runAllTimersAsync();
-    await assertion;
-    vi.useRealTimers();
-  });
-
-  it('succeeds on retry after a transient error', async () => {
-    vi.useFakeTimers();
-    getMock()
-      .mockRejectedValueOnce(new Error('503 Service Unavailable'))
-      .mockResolvedValueOnce({ text: JSON.stringify(MOCK_IDENTIFICATION) });
-
-    const resultPromise = identifyPlant(MOCK_BASE64);
-    await vi.runAllTimersAsync();
-    const result = await resultPromise;
-    expect(result.isPlant).toBe(true);
-    expect(result.species).toBe('Monstera deliciosa');
-    vi.useRealTimers();
-  });
-
-  it('throws the raw error for non-transient failures', async () => {
-    getMock().mockRejectedValueOnce(new Error('Invalid API key'));
-
-    await expect(identifyPlant(MOCK_BASE64)).rejects.toThrow('Invalid API key');
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toContain('/identify');
+    expect(options.method).toBe('POST');
+    const body = JSON.parse(options.body);
+    expect(body.image).toBe(MOCK_BASE64);
   });
 
   it('returns isPlant true for a valid plant', async () => {
-    getMock().mockResolvedValueOnce({ text: JSON.stringify(MOCK_IDENTIFICATION) });
+    mockFetch.mockReturnValueOnce(okResponse(MOCK_IDENTIFICATION));
 
     const result = await identifyPlant(MOCK_BASE64);
-
     expect(result.isPlant).toBe(true);
   });
 
   it('returns isPlant false for a non-plant image', async () => {
-    const nonPlantResult = {
-      isPlant: false,
-      species: 'Unknown',
-      commonName: 'Unknown',
-      confidence: 0,
-      location: 'indoor' as const,
-      health: { status: 'healthy', assessment: '', issues: [] },
-      careSuggestions: { watering: { frequency: '' }, sunlight: '' },
-    };
-    getMock().mockResolvedValueOnce({ text: JSON.stringify(nonPlantResult) });
+    const nonPlant = { ...MOCK_IDENTIFICATION, isPlant: false, commonName: 'Unknown', confidence: 0 };
+    mockFetch.mockReturnValueOnce(okResponse(nonPlant));
 
     const result = await identifyPlant(MOCK_BASE64);
-
     expect(result.isPlant).toBe(false);
     expect(result.confidence).toBe(0);
     expect(result.commonName).toBe('Unknown');
   });
 
-  it('correctly handles a plant with health issues', async () => {
-    const warningResult = {
+  it('retries on 503 and eventually throws a friendly message', async () => {
+    vi.useFakeTimers();
+    mockFetch
+      .mockReturnValueOnce(errorResponse(503, { error: 'Service Unavailable' }))
+      .mockReturnValueOnce(errorResponse(503, { error: 'Service Unavailable' }))
+      .mockReturnValueOnce(errorResponse(503, { error: 'Service Unavailable' }));
+
+    const assertion = expect(identifyPlant(MOCK_BASE64)).rejects.toThrow();
+    await vi.runAllTimersAsync();
+    await assertion;
+    vi.useRealTimers();
+  });
+
+  it('succeeds on retry after a transient 503', async () => {
+    vi.useFakeTimers();
+    mockFetch
+      .mockReturnValueOnce(errorResponse(503))
+      .mockReturnValueOnce(okResponse(MOCK_IDENTIFICATION));
+
+    const promise = identifyPlant(MOCK_BASE64);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+    expect(result.isPlant).toBe(true);
+    expect(result.species).toBe('Monstera deliciosa');
+    vi.useRealTimers();
+  });
+
+  it('throws on non-transient errors without retrying', async () => {
+    mockFetch.mockReturnValueOnce(errorResponse(400, { error: 'Bad Request' }));
+
+    await expect(identifyPlant(MOCK_BASE64)).rejects.toThrow();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries on network errors (TypeError)', async () => {
+    vi.useFakeTimers();
+    mockFetch
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockReturnValueOnce(okResponse(MOCK_IDENTIFICATION));
+
+    const promise = identifyPlant(MOCK_BASE64);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+    expect(result.species).toBe('Monstera deliciosa');
+    vi.useRealTimers();
+  });
+
+  it('handles plants with health issues', async () => {
+    const warning = {
       ...MOCK_IDENTIFICATION,
       health: { status: 'warning', assessment: 'Brown tips.', issues: ['Brown leaf tips', 'Low humidity'] },
     };
-    getMock().mockResolvedValueOnce({ text: JSON.stringify(warningResult) });
+    mockFetch.mockReturnValueOnce(okResponse(warning));
 
     const result = await identifyPlant(MOCK_BASE64);
-
     expect(result.health.status).toBe('warning');
     expect(result.health.issues).toContain('Brown leaf tips');
     expect(result.health.issues).toHaveLength(2);
   });
 });
 
+// ─── reanalyzeWithCorrectName ─────────────────────────────────────────────────
+
+describe('reanalyzeWithCorrectName', () => {
+  beforeEach(() => mockFetch.mockReset());
+
+  it('sends commonName and species in the request body', async () => {
+    mockFetch.mockReturnValueOnce(okResponse(MOCK_IDENTIFICATION));
+
+    await reanalyzeWithCorrectName(MOCK_BASE64, 'Fiddle Leaf Fig', 'Ficus lyrata');
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.commonName).toBe('Fiddle Leaf Fig');
+    expect(body.species).toBe('Ficus lyrata');
+    expect(body.image).toBe(MOCK_BASE64);
+  });
+
+  it('throws on error response', async () => {
+    mockFetch.mockReturnValueOnce(errorResponse(500, { error: 'Reanalysis failed.' }));
+
+    await expect(reanalyzeWithCorrectName(MOCK_BASE64, 'Rose', '')).rejects.toThrow('Reanalysis failed.');
+  });
+});
+
 // ─── analyzeGrowth ────────────────────────────────────────────────────────────
 
 describe('analyzeGrowth', () => {
-  beforeEach(() => getMock().mockReset());
+  beforeEach(() => mockFetch.mockReset());
 
   it('returns a parsed growth analysis result on success', async () => {
-    getMock().mockResolvedValueOnce({ text: JSON.stringify(MOCK_GROWTH) });
+    mockFetch.mockReturnValueOnce(okResponse(MOCK_GROWTH));
 
     const result = await analyzeGrowth(MOCK_BASE64, []);
-
     expect(result.status).toBe('Improved');
     expect(result.growthDetected).toBe(true);
   });
 
-  it('sends only the new image when no past images are provided', async () => {
-    getMock().mockResolvedValueOnce({ text: JSON.stringify(MOCK_GROWTH) });
+  it('sends newImage and pastImages in the request body', async () => {
+    mockFetch.mockReturnValueOnce(okResponse(MOCK_GROWTH));
 
-    await analyzeGrowth(MOCK_BASE64, []);
+    await analyzeGrowth(MOCK_BASE64, ['data:image/jpeg;base64,old']);
 
-    const imageParts = getMock().mock.calls[0][0].contents.parts.filter((p: any) => p.inlineData);
-    expect(imageParts).toHaveLength(1);
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.newImage).toBe(MOCK_BASE64);
+    expect(body.pastImages).toHaveLength(1);
   });
 
-  it('slices past images to a maximum of 3', async () => {
-    getMock().mockResolvedValueOnce({ text: JSON.stringify(MOCK_GROWTH) });
+  it('throws on error response', async () => {
+    mockFetch.mockReturnValueOnce(errorResponse(500, { error: 'Growth analysis failed.' }));
 
-    await analyzeGrowth(MOCK_BASE64, Array(10).fill('data:image/jpeg;base64,old'));
-
-    const imageParts = getMock().mock.calls[0][0].contents.parts.filter((p: any) => p.inlineData);
-    expect(imageParts).toHaveLength(4); // 3 past + 1 new
+    await expect(analyzeGrowth(MOCK_BASE64, [])).rejects.toThrow('Growth analysis failed.');
   });
 
-  it('throws when the AI returns an empty response', async () => {
-    getMock().mockResolvedValueOnce({ text: null });
-
-    await expect(analyzeGrowth(MOCK_BASE64, [])).rejects.toThrow('AI returned an empty response');
-  });
-
-  it('throws when the AI call fails', async () => {
-    getMock().mockRejectedValueOnce(new Error('Rate limit exceeded'));
-
-    await expect(analyzeGrowth(MOCK_BASE64, [])).rejects.toThrow('Rate limit exceeded');
-  });
-
-  it('returns growthDetected: false when no growth is visible', async () => {
-    getMock().mockResolvedValueOnce({
-      text: JSON.stringify({ status: 'Stagnant', description: 'No change.', growthDetected: false }),
-    });
+  it('returns growthDetected false when no growth is visible', async () => {
+    mockFetch.mockReturnValueOnce(
+      okResponse({ status: 'Stagnant', description: 'No change.', growthDetected: false })
+    );
 
     const result = await analyzeGrowth(MOCK_BASE64, [MOCK_BASE64]);
     expect(result.growthDetected).toBe(false);

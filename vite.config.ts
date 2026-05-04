@@ -17,9 +17,7 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
-        '/identify': 'http://127.0.0.1:5001/smart-gardener-53b16/us-central1',
-        '/reanalyze': 'http://127.0.0.1:5001/smart-gardener-53b16/us-central1',
-        '/growth': 'http://127.0.0.1:5001/smart-gardener-53b16/us-central1',
+        '/api': 'http://localhost:3001',
       },
     },
     build: {

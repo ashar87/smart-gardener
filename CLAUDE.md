@@ -80,26 +80,27 @@ Plants are stored in Firestore at `users/{uid}/plants/{plantId}` and kept in syn
 
 **Image storage:** `uploadPlantImage` in `cloudSync.ts` is intentionally a no-op — it returns the compressed base64 string directly. Images are stored as base64 inside Firestore documents. Firebase Storage was bypassed due to free-tier regional constraints.
 
-### AI Services (`src/services/geminiService.ts`)
+### AI Services (`src/services/geminiService.ts` + `api/`)
 
-Uses `@google/genai` with structured JSON output (schema-enforced via `responseSchema`). Three exported functions, all using `gemini-3-flash-preview`:
+The Gemini API key lives **server-side only**. The client calls a backend proxy; the proxy calls Gemini. This keeps the key out of the browser bundle.
 
-**`identifyPlant(base64)`**
-- Returns `IdentificationResult` with `isPlant: boolean` as the first field.
-- If `isPlant` is `false` (non-plant image), `App.tsx` stays in the `'analyzing'` view and renders an error card instead of transitioning to `'result'`.
-- Retries up to **3 attempts** with exponential backoff (1500ms × attempt) on transient errors (`503 UNAVAILABLE`, `429 RESOURCE_EXHAUSTED`). After exhausting retries, throws a human-readable "high demand" message.
-- Non-transient errors (bad API key, etc.) throw immediately without retrying.
+**Client (`src/services/geminiService.ts`)** — thin HTTP wrapper. Calls `/api/identify`, `/api/reanalyze`, `/api/growth` via `fetch`. `VITE_API_BASE_URL` prefixes the base (empty in dev — Vite proxy handles routing; set to the Vercel deployment URL in production).
 
-**`analyzeGrowth(newImage, pastImages[])`**
-- Compares up to 3 past images against the current image to detect growth.
-- Returns `{ status, description, growthDetected }`.
+**Server (`api/`)** — Vercel Serverless Functions:
+- `api/identify.ts` — POSTs image to Gemini, returns `IdentificationResult`. Retries up to 3× on 503 or network errors with 1500ms × attempt backoff.
+- `api/reanalyze.ts` — Re-runs analysis with a user-confirmed plant name; forces `commonName`/`species` onto the result.
+- `api/growth.ts` — Compares up to 3 past images against the current photo to detect growth.
+- `api/_gemini.ts` — Shared schemas (`RESPONSE_SCHEMA`, `GROWTH_SCHEMA`), model name, and `isTransient` helper. Not a route (prefixed with `_`).
 
-**`reanalyzeWithCorrectName(base64, commonName, species)`**
-- Called when the user corrects the AI-identified name via the "Not X?" panel.
-- Forces the confirmed name back onto the result regardless of what the model returns.
-- No retry logic (user-triggered, not a background operation).
+**`GEMINI_API_KEY`** must be set as an environment variable in the Vercel dashboard (or `functions/.env` for local emulator use).
 
-The Gemini client is instantiated per-call via `getAiClient()` to pick up the env var at call time.
+**Local dev proxy** — `vite.config.ts` proxies `/api/*` → `http://localhost:3001` (Vercel dev server). Run `npx vercel dev` on port 3001 alongside `npm run dev` for a fully local setup.
+
+**Retry / error behaviour:**
+- 503 responses → retry up to 3×; after exhaustion throws the API's error message
+- Network errors (`TypeError`) → retry up to 3×
+- All other errors → throw immediately, no retry
+- `isPlant: false` in the response → `App.tsx` shows an error card, never transitions to `'result'`
 
 ### Notification Service (`src/services/notificationService.ts`)
 

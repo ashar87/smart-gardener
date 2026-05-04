@@ -6,12 +6,12 @@
 import { IdentificationResult } from "../types";
 
 /**
- * Returns the base URL for the Gemini proxy Cloud Functions.
- * In development, Vite proxies /api/* to the Firebase emulator.
- * In production, this points to the deployed Cloud Function URL.
+ * Returns the base URL for the Gemini proxy.
+ * In development, Vite proxies /api/* to the Vercel dev server.
+ * In production, Vercel serves /api/* as serverless functions automatically.
  */
 const getApiBaseUrl = (): string => {
-  return import.meta.env.VITE_API_BASE_URL || '';
+  return (import.meta.env.VITE_API_BASE_URL || '') + '/api';
 };
 
 export async function identifyPlant(base64Image: string): Promise<IdentificationResult> {
@@ -37,15 +37,13 @@ export async function identifyPlant(base64Image: string): Promise<Identification
 
       return await response.json();
     } catch (error) {
-      if (attempt < maxAttempts && error instanceof TypeError) {
-        // Network error — retry
-        await new Promise(r => setTimeout(r, 1500 * attempt));
+      if (error instanceof TypeError && attempt < maxAttempts) {
+        // Network error — retry with backoff
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
         continue;
       }
       console.error("Identification error:", error);
-      if (attempt === maxAttempts) {
-        throw error instanceof Error ? error : new Error("Plant identification failed.");
-      }
+      throw error instanceof Error ? error : new Error("Plant identification failed.");
     }
   }
 
@@ -57,7 +55,6 @@ export async function reanalyzeWithCorrectName(
   commonName: string,
   species: string
 ): Promise<IdentificationResult> {
-  console.log(`Calling proxy for care reanalysis with confirmed name: ${commonName}...`);
 
   const response = await fetch(`${getApiBaseUrl()}/reanalyze`, {
     method: 'POST',
@@ -74,7 +71,6 @@ export async function reanalyzeWithCorrectName(
 }
 
 export async function analyzeGrowth(newImage: string, pastImages: string[]): Promise<any> {
-  console.log('Calling proxy for growth analysis...');
 
   const response = await fetch(`${getApiBaseUrl()}/growth`, {
     method: 'POST',
