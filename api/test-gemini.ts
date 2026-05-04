@@ -1,10 +1,10 @@
-const GEMINI_URL = (key: string) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
-
 export default async function handler(req: any, res: any) {
+  const model = (req.query?.model as string) || "gemini-2.5-flash";
+  const key = process.env.GEMINI_API_KEY || "";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+
   try {
-    const key = process.env.GEMINI_API_KEY || "";
-    const response = await fetch(GEMINI_URL(key), {
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -12,10 +12,10 @@ export default async function handler(req: any, res: any) {
       }),
     });
     const data = await response.json() as any;
-    if (!response.ok) return res.status(500).json({ success: false, error: data?.error?.message });
+    if (!response.ok) return res.status(response.status).json({ success: false, model, error: data?.error?.message });
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    return res.json({ success: true, reply });
+    return res.json({ success: true, model, reply });
   } catch (error) {
-    return res.status(500).json({ success: false, error: String(error) });
+    return res.status(500).json({ success: false, model, error: String(error) });
   }
 }
