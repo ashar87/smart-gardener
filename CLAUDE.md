@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Keep this file up to date.** Any code change that affects architecture, data flow, service behaviour, or component APIs must be reflected here before committing.
+
 ## Commands
 
 ```bash
@@ -19,35 +21,234 @@ npx vitest run src/utils/calendarUtils.test.ts
 
 Copy `.env.example` to `.env` and populate all `VITE_FIREBASE_*` vars plus `VITE_GEMINI_API_KEY`. Firebase will silently skip initialization if `VITE_FIREBASE_API_KEY` is missing, leaving `auth`, `db`, and `storage` as `null` — the app will show the Onboarding screen but all auth actions will throw.
 
+## Project Overview
+
+Smart Gardener is an AI-powered plant identification and care management app. Users photograph a plant, Gemini identifies it and generates a care schedule, and the app tracks watering/health history with push notifications. Built as a mobile-first PWA with Capacitor for native iOS/Android packaging.
+
+**App ID:** `com.smartgardener.app` | **Tech stack:** React 19 + Vite 6 + Firebase 12 + Tailwind 4 + Gemini AI
+
+---
+
 ## Architecture
 
 ### Auth Gate
-`AuthProvider` (`src/contexts/AuthContext.tsx`) wraps the entire app. It renders **nothing** (`{!loading && children}`) while Firebase resolves auth state. If `auth` is `null` (Firebase unconfigured), loading is set to false immediately. Once resolved, `AppContent` either shows `<Onboarding />` (unauthenticated) or the main app.
+
+`AuthProvider` (`src/contexts/AuthContext.tsx`) wraps the entire app. It exposes `currentUser`, `loading`, and four auth methods (`signInWithGoogle`, `loginWithEmail`, `registerWithEmail`, `logout`). The provider renders **nothing** while Firebase resolves auth state (`{!loading && children}`). If `auth` is `null` (Firebase unconfigured), `loading` is set to `false` immediately and the auth listener is skipped. Once resolved, `AppContent` shows either `<Onboarding />` (unauthenticated) or the main app.
 
 ### State & Data Flow
-All plant state lives in `AppContent` (`src/App.tsx`). The app uses a single-page architecture with a `view` state machine (`'dashboard' | 'add' | 'analyzing' | 'result' | 'detail'`) rather than a router. Tab switching (`'garden' | 'calendar' | 'settings'`) only applies when `view === 'dashboard'`.
+
+All plant state lives in `AppContent` (`src/App.tsx`). The app uses a single-page architecture with a `view` state machine rather than a router:
+
+```
+'dashboard' | 'add' | 'analyzing' | 'result' | 'detail'
+```
+
+Tab switching (`'garden' | 'calendar' | 'settings'`) only applies when `view === 'dashboard'`.
+
+**Key state variables in AppContent:**
+
+| Variable | Type | Purpose |
+|---|---|---|
+| `plants` | `Plant[]` | Live-synced from Firestore |
+| `view` | string | Current screen |
+| `activeTab` | `Tab` | garden / calendar / settings |
+| `locationFilter` | string | all / indoor / outdoor filter for garden grid |
+| `currentImage` | string | base64 of the uploaded photo |
+| `analysisResult` | `IdentificationResult` | Gemini output for the current upload |
+| `selectedPlant` | `Plant` | Plant shown in the detail view |
+| `uploadError` | `UploadError \| null` | `{ kind: 'not_a_plant' }` or `{ kind: 'api_error'; message }` — shown in-place inside the 'analyzing' view instead of navigating away |
+| `manualOverride` | `{ commonName, species } \| null` | User-corrected name after "Not X?" panel |
+| `isReanalyzing` | boolean | Gemini reanalysis in progress |
+| `reanalyzedName` | string | Triggers "Updated Analysis" label + toast |
+| `showReanalyzedToast` | boolean | Controls the success toast pill |
+| `notificationsEnabled` | boolean | Persisted in localStorage |
+| `compareMode` | boolean | Single vs before/after growth photo |
+
+**View transitions:**
+
+```
+dashboard ──(FAB click)──► add ──(upload)──► analyzing ──(isPlant=true)──► result ──(confirm)──► dashboard
+                                                  │                           │
+                                         (isPlant=false)              (discard)
+                                         (api error)                       │
+                                              │                         dashboard
+                                    [error card in-place]
+                                    (retry → add | back → dashboard)
+```
 
 Plants are stored in Firestore at `users/{uid}/plants/{plantId}` and kept in sync via `subscribeToPlants` (a Firestore `onSnapshot` listener set up in a `useEffect`). All mutations go through `syncPlantToCloud`, which has a 10-second timeout to surface Firestore misconfiguration.
 
-**Image storage:** `uploadPlantImage` in `cloudSync.ts` is intentionally a no-op — it returns the compressed base64 string directly. Images are stored as base64 inside Firestore documents (Firebase Storage was bypassed due to free-tier regional constraints).
+**Image storage:** `uploadPlantImage` in `cloudSync.ts` is intentionally a no-op — it returns the compressed base64 string directly. Images are stored as base64 inside Firestore documents. Firebase Storage was bypassed due to free-tier regional constraints.
 
 ### AI Services (`src/services/geminiService.ts`)
-Uses `@google/genai` with structured JSON output (schema-enforced via `responseSchema`). Two functions:
-- `identifyPlant(base64)` — species ID, health assessment, care schedule, and indoor/outdoor prediction. Returns `isPlant: boolean` — if false, the app shows an in-app error card instead of the result view. Retries up to 3 times (with 1.5s/3s backoff) on transient 503/429 errors before surfacing a user-friendly message.
-- `analyzeGrowth(newImage, pastImages[])` — compares up to 3 past images against current to detect growth
 
-Both use `gemini-3-flash-preview`. The Gemini client is instantiated per-call via `getAiClient()` to pick up the env var at call time.
+Uses `@google/genai` with structured JSON output (schema-enforced via `responseSchema`). Three exported functions, all using `gemini-3-flash-preview`:
+
+**`identifyPlant(base64)`**
+- Returns `IdentificationResult` with `isPlant: boolean` as the first field.
+- If `isPlant` is `false` (non-plant image), `App.tsx` stays in the `'analyzing'` view and renders an error card instead of transitioning to `'result'`.
+- Retries up to **3 attempts** with exponential backoff (1500ms × attempt) on transient errors (`503 UNAVAILABLE`, `429 RESOURCE_EXHAUSTED`). After exhausting retries, throws a human-readable "high demand" message.
+- Non-transient errors (bad API key, etc.) throw immediately without retrying.
+
+**`analyzeGrowth(newImage, pastImages[])`**
+- Compares up to 3 past images against the current image to detect growth.
+- Returns `{ status, description, growthDetected }`.
+
+**`reanalyzeWithCorrectName(base64, commonName, species)`**
+- Called when the user corrects the AI-identified name via the "Not X?" panel.
+- Forces the confirmed name back onto the result regardless of what the model returns.
+- No retry logic (user-triggered, not a background operation).
+
+The Gemini client is instantiated per-call via `getAiClient()` to pick up the env var at call time.
 
 ### Notification Service (`src/services/notificationService.ts`)
-Platform-aware: uses `@capacitor/local-notifications` on native (iOS/Android) and `Notification` API with `setTimeout` as a web fallback. Notification scheduling is fire-and-forget with no persistence — on web, notifications only fire if the app tab remains open.
 
-### Utilities
-`src/utils/calendarUtils.ts` contains pure, framework-free functions for grouping plants by watering urgency (`overdue | today | tomorrow | upcoming`) and filtering by location. All calendar logic lives here and is unit-tested independently of React.
+Platform-aware via `Capacitor.isNativePlatform()`:
+- **Native (iOS/Android):** Uses `@capacitor/local-notifications` with a computed integer ID (sum of first + last char codes of `plantId`).
+- **Web fallback:** Uses the `Notification` API with `setTimeout`. Notifications only fire if the app tab remains open.
 
-`src/services/storage.ts` is an IndexedDB wrapper (get/set). It exists but is not currently used by the main app — plants are stored exclusively in Firestore.
+Scheduling is fire-and-forget with no persistence. Cancels any existing notification before rescheduling. Exported: `requestNotificationPermission`, `scheduleWateringNotification`, `cancelWateringNotification`.
 
-### Styling
-Tailwind CSS v4 (via `@tailwindcss/vite`). Custom semantic color tokens used throughout: `moss` (primary green), `stone` (text), `sand` (background), `clay` (borders/muted), `terracotta` (accent/CTA).
+### Cloud Sync (`src/services/cloudSync.ts`)
 
-### Testing
-Vitest + jsdom + `@testing-library/react`. Tests are colocated with source files (`*.test.ts` / `*.test.tsx`). The calendar utils are tested as pure functions. Component tests mock Firebase and Gemini services.
+Firestore path: `users/{userId}/plants/{plantId}`
+
+| Function | Behaviour |
+|---|---|
+| `uploadPlantImage(...)` | No-op — returns base64 directly; Firebase Storage not used |
+| `syncPlantToCloud(userId, plant)` | `setDoc` with 10-second timeout via `Promise.race` |
+| `deletePlantFromCloud(userId, plantId)` | `deleteDoc`; does **not** delete Storage assets (none exist) |
+| `subscribeToPlants(userId, callback)` | `onSnapshot` listener; sorts by `addedAt` descending; returns unsubscribe fn |
+
+### Calendar Utilities (`src/utils/calendarUtils.ts`)
+
+Pure, framework-free functions — unit-tested independently of React:
+
+- `getDaysUntilWatering(nextWateredTimestamp, now?)` → whole calendar days (negative = overdue)
+- `getWateringGroup(daysUntil)` → `'overdue' | 'today' | 'tomorrow' | 'upcoming'`
+- `groupPlantsByWateringSchedule(plants, now?)` → Record of the 4 groups, sorted within each
+- `filterPlantsByLocation(plants, filter)` → filters by `plant.location`; plants with `undefined` location are excluded from `'indoor'` / `'outdoor'` filters
+
+---
+
+## Components
+
+### `BottomNav` (`src/components/BottomNav.tsx`)
+
+Props: `{ activeTab: Tab; onTabChange: (tab: Tab) => void }`
+
+Fixed bottom navigation with 3 tabs (Garden / Calendar / Settings). Active tab gets moss colour and a top indicator bar. Includes `aria-selected` and `aria-label` for accessibility.
+
+### `CalendarView` (`src/components/CalendarView.tsx`)
+
+Props: `{ plants: Plant[]; onWaterPlant: (plantId: string) => void; onPlantClick: (plant: Plant) => void }`
+
+Groups plants by watering urgency using `groupPlantsByWateringSchedule()`. Renders 4 sections (overdue / today / tomorrow / upcoming) — only non-empty sections shown. Water button uses `stopPropagation` to avoid triggering `onPlantClick`.
+
+### `SettingsView` (`src/components/SettingsView.tsx`)
+
+Props: `{ notificationsEnabled: boolean; onToggleNotifications: () => void }`
+
+Shows user profile card, notification toggle, app info (v1.0, Gemini AI), cloud sync note, and a sign-out button that calls `logout()` from `AuthContext`.
+
+### `Onboarding` (`src/components/Onboarding.tsx`)
+
+Three local modes: `landing → signup | login`. Supports Google OAuth and email/password auth. Validates presence + password length (≥ 6 chars) before calling Firebase. Maps Firebase error codes to user-friendly messages. Checks `!auth` before auth attempts and shows a Firebase config error if unconfigured.
+
+---
+
+## Types (`src/types.ts`)
+
+```typescript
+interface Plant {
+  id: string;
+  species: string;
+  commonName: string;
+  image: string;               // base64
+  addedAt: number;             // Unix ms
+  location?: 'indoor' | 'outdoor';
+  healthStatus: PlantHealth;
+  careSchedule: CareSchedule;
+  history: CareEvent[];
+  growthLog: GrowthMilestone[];
+  reminders?: { watering: boolean; pruningFertilizing: boolean; lastNotifiedAt?: number };
+}
+
+interface IdentificationResult {
+  isPlant: boolean;            // false → show error card, never transition to result view
+  species: string;
+  commonName: string;
+  confidence: number;          // 0–1
+  location: 'indoor' | 'outdoor';
+  health: PlantHealth;
+  careSuggestions: Partial<CareSchedule>;
+}
+
+interface PlantHealth {
+  status: 'healthy' | 'warning' | 'critical';
+  assessment: string;
+  issues: string[];
+}
+
+interface CareSchedule {
+  watering: { frequency: string; lastWatered: number; nextWatered: number };
+  sunlight: string;
+  fertilizer?: string;
+  pruning?: string;
+}
+
+interface CareEvent {
+  id: string;
+  type: 'watering' | 'fertilizing' | 'pruning' | 'health_check';
+  timestamp: number;
+  note?: string;
+}
+
+interface GrowthMilestone {
+  id: string;
+  image: string;               // base64
+  timestamp: number;
+  analysis: { status: string; description: string; growthDetected: boolean };
+}
+```
+
+---
+
+## Styling
+
+Tailwind CSS v4 (via `@tailwindcss/vite`). Custom semantic color tokens defined in `src/index.css`:
+
+| Token | Hex | Usage |
+|---|---|---|
+| `moss` | `#5A5A40` | Primary green — buttons, active states, headings |
+| `terracotta` | `#C97C5D` | Accent / CTA — add button, errors, warnings |
+| `sand` | `#F5F5F0` | Background |
+| `stone` | `#333` | Body text |
+| `clay` | `#E8E8DF` | Borders, muted surfaces |
+
+Fonts: **Inter** (sans-serif body) + **Cormorant Garamond** (serif headings). Animations via `motion/react` (Framer Motion). Custom utilities: `no-scrollbar`, `pt-safe`, `pb-safe`.
+
+---
+
+## Testing
+
+Vitest + jsdom + `@testing-library/react`. Tests are colocated with source files (`*.test.ts` / `*.test.tsx`).
+
+| Test file | Coverage |
+|---|---|
+| `geminiService.test.ts` | Plant ID (success, empty response, 503 retry × 3, non-transient errors, base64 stripping, isPlant flag, growth analysis) |
+| `cloudSync.test.ts` | uploadPlantImage no-op, syncPlantToCloud path + timeout, delete, subscribe + sort |
+| `firebase.test.ts` | Google sign-in, email login/register, error code mapping |
+| `calendarUtils.test.ts` | getDaysUntilWatering, getWateringGroup, groupPlantsByWateringSchedule sort, filterPlantsByLocation |
+| `BottomNav.test.tsx` | Tab rendering, aria-selected, onTabChange callback |
+| `CalendarView.test.tsx` | Empty state, group headers, plant cards, Water button interactions, stopPropagation |
+| `SettingsView.test.tsx` | Rendering, notification toggle, sign-out |
+| `Onboarding.test.tsx` | Screen modes, form validation, Firebase config error |
+
+**Mocking pattern:** `vi.mock` factories are hoisted — shared mock functions are stored on `globalThis` so tests can access them after import.
+
+---
+
+## Unused Code
+
+- `src/services/storage.ts` — IndexedDB wrapper (get/set). Not imported anywhere; plants are stored exclusively in Firestore.
