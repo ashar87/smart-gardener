@@ -3,7 +3,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 export const getAi = () =>
   new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
-export const MODEL = "gemini-3-flash-preview";
+export const MODEL = "gemini-2.0-flash";
 
 export const RESPONSE_SCHEMA = {
   type: Type.OBJECT,

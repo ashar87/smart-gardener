@@ -44,10 +44,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await new Promise((r) => setTimeout(r, 1500 * attempt));
         continue;
       }
-      console.error("identify error:", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("identify error:", msg);
       return res
         .status(isTransient(error) ? 503 : 500)
-        .json({ error: isTransient(error) ? "AI service is busy. Please try again." : "Plant identification failed." });
+        .json({ error: isTransient(error) ? "AI service is busy. Please try again." : `Plant identification failed: ${msg}` });
     }
   }
 
