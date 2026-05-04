@@ -33,7 +33,7 @@ Plants are stored in Firestore at `users/{uid}/plants/{plantId}` and kept in syn
 
 ### AI Services (`src/services/geminiService.ts`)
 Uses `@google/genai` with structured JSON output (schema-enforced via `responseSchema`). Two functions:
-- `identifyPlant(base64)` — species ID, health assessment, care schedule, and indoor/outdoor prediction
+- `identifyPlant(base64)` — species ID, health assessment, care schedule, and indoor/outdoor prediction. Returns `isPlant: boolean` — if false, the app shows an in-app error card instead of the result view. Retries up to 3 times (with 1.5s/3s backoff) on transient 503/429 errors before surfacing a user-friendly message.
 - `analyzeGrowth(newImage, pastImages[])` — compares up to 3 past images against current to detect growth
 
 Both use `gemini-3-flash-preview`. The Gemini client is instantiated per-call via `getAiClient()` to pick up the env var at call time.

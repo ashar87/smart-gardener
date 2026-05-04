@@ -17,6 +17,10 @@ const getAiClient = () => {
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
+    isPlant: {
+      type: Type.BOOLEAN,
+      description: "true if the image clearly shows a plant, tree, flower, moss, fungi, or other botanical organism. false for animals, people, objects, food, or landscapes with no identifiable plant."
+    },
     species: { type: Type.STRING, description: "Scientific name of the plant" },
     commonName: { type: Type.STRING, description: "Common name of the plant" },
     confidence: { type: Type.NUMBER, description: "Confidence score 0-1" },
@@ -51,7 +55,7 @@ const RESPONSE_SCHEMA = {
       required: ["watering", "sunlight"]
     }
   },
-  required: ["species", "commonName", "confidence", "location", "health", "careSuggestions"]
+  required: ["isPlant", "species", "commonName", "confidence", "location", "health", "careSuggestions"]
 };
 
 const GROWTH_SCHEMA = {
@@ -64,45 +68,63 @@ const GROWTH_SCHEMA = {
   required: ["status", "description", "growthDetected"]
 };
 
+const isTransientError = (error: unknown): boolean => {
+  const msg = error instanceof Error ? error.message : String(error);
+  return msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED');
+};
+
 export async function identifyPlant(base64Image: string): Promise<IdentificationResult> {
   const model = "gemini-3-flash-preview";
   const ai = getAiClient();
-  
-  console.log(`Calling Gemini (${model}) for plant identification...`);
-  
-  try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              data: base64Image.split(',')[1] || base64Image,
-              mimeType: "image/jpeg"
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data: base64Image.split(',')[1] || base64Image,
+                mimeType: "image/jpeg"
+              }
+            },
+            {
+              text: "Identify this plant, assess its health, and predict whether it is typically an indoor or outdoor plant. Provide detailed care instructions in JSON format."
             }
-          },
-          {
-            text: "Identify this plant, assess its health, and predict whether it is typically an indoor or outdoor plant. Provide detailed care instructions in JSON format."
-          }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
-        systemInstruction: "You are an expert botanist and computer vision plant identification engine. Always return valid JSON. For the location field, carefully consider whether this species thrives indoors or outdoors in typical home environments."
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: RESPONSE_SCHEMA,
+          systemInstruction: "You are an expert botanist and computer vision plant identification engine. Always return valid JSON. For the location field, carefully consider whether this species thrives indoors or outdoors in typical home environments. If the image does not show a plant, set isPlant to false, species to 'Unknown', commonName to 'Unknown', confidence to 0, and health.status to 'healthy' with an empty issues array. Never fabricate plant data for non-plant images."
+        }
+      });
+
+      if (!response.text) {
+        throw new Error("AI returned an empty response.");
       }
-    });
 
-    if (!response.text) {
-      throw new Error("AI returned an empty response.");
+      const rawResult = JSON.parse(response.text);
+      return rawResult as IdentificationResult;
+    } catch (error) {
+      const transient = isTransientError(error);
+      if (transient && attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      console.error("Gemini API Error (Identification):", error);
+      // Surface a human-readable message for known transient errors
+      if (transient) {
+        throw new Error("Gemini is experiencing high demand right now. Please try again in a moment.");
+      }
+      throw error;
     }
-
-    const rawResult = JSON.parse(response.text);
-    return rawResult as IdentificationResult;
-  } catch (error) {
-    console.error("Gemini API Error (Identification):", error);
-    throw error;
   }
+
+  // unreachable, satisfies TypeScript
+  throw new Error("Gemini is experiencing high demand right now. Please try again in a moment.");
 }
 
 export async function reanalyzeWithCorrectName(

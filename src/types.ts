@@ -57,6 +57,7 @@ export interface CareSchedule {
 }
 
 export interface IdentificationResult {
+  isPlant: boolean;
   species: string;
   commonName: string;
   confidence: number;

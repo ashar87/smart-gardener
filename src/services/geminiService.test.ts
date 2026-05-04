@@ -5,7 +5,7 @@
  * works correctly under Vitest's module hoisting.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Store the mock fn in module scope so tests can access it via import
 // The trick: use a module-level __mocks__ object that the factory closes over
@@ -43,6 +43,7 @@ const getMock = (): ReturnType<typeof vi.fn> => (globalThis as any).__geminiGene
 const MOCK_BASE64 = 'data:image/jpeg;base64,/9j/fakeimagebytes';
 
 const MOCK_IDENTIFICATION = {
+  isPlant: true,
   species: 'Monstera deliciosa',
   commonName: 'Swiss Cheese Plant',
   confidence: 0.97,
@@ -97,10 +98,66 @@ describe('identifyPlant', () => {
     await expect(identifyPlant(MOCK_BASE64)).rejects.toThrow('AI returned an empty response');
   });
 
-  it('throws when the network call fails', async () => {
-    getMock().mockRejectedValueOnce(new Error('503 Service Unavailable'));
+  it('retries on transient 503 errors and eventually throws a friendly message', async () => {
+    vi.useFakeTimers();
+    const err = new Error('503 Service Unavailable');
+    getMock()
+      .mockRejectedValueOnce(err)
+      .mockRejectedValueOnce(err)
+      .mockRejectedValueOnce(err);
 
-    await expect(identifyPlant(MOCK_BASE64)).rejects.toThrow('503 Service Unavailable');
+    // Attach rejection handler before advancing timers to avoid unhandled rejection warning
+    const assertion = expect(identifyPlant(MOCK_BASE64)).rejects.toThrow('high demand');
+    await vi.runAllTimersAsync();
+    await assertion;
+    vi.useRealTimers();
+  });
+
+  it('succeeds on retry after a transient error', async () => {
+    vi.useFakeTimers();
+    getMock()
+      .mockRejectedValueOnce(new Error('503 Service Unavailable'))
+      .mockResolvedValueOnce({ text: JSON.stringify(MOCK_IDENTIFICATION) });
+
+    const resultPromise = identifyPlant(MOCK_BASE64);
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
+    expect(result.isPlant).toBe(true);
+    expect(result.species).toBe('Monstera deliciosa');
+    vi.useRealTimers();
+  });
+
+  it('throws the raw error for non-transient failures', async () => {
+    getMock().mockRejectedValueOnce(new Error('Invalid API key'));
+
+    await expect(identifyPlant(MOCK_BASE64)).rejects.toThrow('Invalid API key');
+  });
+
+  it('returns isPlant true for a valid plant', async () => {
+    getMock().mockResolvedValueOnce({ text: JSON.stringify(MOCK_IDENTIFICATION) });
+
+    const result = await identifyPlant(MOCK_BASE64);
+
+    expect(result.isPlant).toBe(true);
+  });
+
+  it('returns isPlant false for a non-plant image', async () => {
+    const nonPlantResult = {
+      isPlant: false,
+      species: 'Unknown',
+      commonName: 'Unknown',
+      confidence: 0,
+      location: 'indoor' as const,
+      health: { status: 'healthy', assessment: '', issues: [] },
+      careSuggestions: { watering: { frequency: '' }, sunlight: '' },
+    };
+    getMock().mockResolvedValueOnce({ text: JSON.stringify(nonPlantResult) });
+
+    const result = await identifyPlant(MOCK_BASE64);
+
+    expect(result.isPlant).toBe(false);
+    expect(result.confidence).toBe(0);
+    expect(result.commonName).toBe('Unknown');
   });
 
   it('correctly handles a plant with health issues', async () => {

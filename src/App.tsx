@@ -5,7 +5,7 @@
 
 import { useState, useEffect, ChangeEvent, MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Leaf, Calendar, Camera, Info, Check, Trash2, HeartPulse, Droplets, Sprout, Scissors, Bell, BellOff, History, Sparkles, ArrowLeftRight, Image as ImageIcon, ArrowLeft, LogOut } from 'lucide-react';
+import { Plus, Leaf, Calendar, Camera, Info, Check, Trash2, HeartPulse, Droplets, Sprout, Scissors, Bell, BellOff, History, Sparkles, ArrowLeftRight, Image as ImageIcon, ArrowLeft, LogOut, ImageOff } from 'lucide-react';
 import { Plant, IdentificationResult, CareEvent, GrowthMilestone } from './types';
 import { identifyPlant, analyzeGrowth, reanalyzeWithCorrectName } from './services/geminiService';
 import { requestNotificationPermission, scheduleWateringNotification, cancelWateringNotification } from './services/notificationService';
@@ -137,6 +137,9 @@ function AppContent() {
   const [overrideCommonName, setOverrideCommonName] = useState('');
   const [overrideSpecies, setOverrideSpecies] = useState('');
   const [isReanalyzing, setIsReanalyzing] = useState(false);
+
+  type UploadError = { kind: 'not_a_plant' } | { kind: 'api_error'; message: string };
+  const [uploadError, setUploadError] = useState<UploadError | null>(null);
   const [reanalyzedName, setReanalyzedName] = useState<string | null>(null);
   const [showReanalyzedToast, setShowReanalyzedToast] = useState(false);
 
@@ -195,16 +198,17 @@ function AppContent() {
     const reader = new FileReader();
     reader.onload = async () => {
       const originalBase64 = reader.result as string;
+      setUploadError(null);
       setView('analyzing');
       setLoadingMessage('Optimizing image for AI...');
-      
+
       try {
         await new Promise(r => setTimeout(r, 50));
         const base64 = await compressImage(originalBase64, 1024, 0.7);
-        
+
         // Check for duplicates
-        const isDuplicate = plants.some(p => 
-          p.image === base64 || 
+        const isDuplicate = plants.some(p =>
+          p.image === base64 ||
           p.growthLog?.some(m => m.image === base64)
         );
 
@@ -216,10 +220,14 @@ function AppContent() {
 
         setCurrentImage(base64);
         setLoadingMessage('Consulting botanist AI...');
-        
-        console.log("Starting plant identification...");
+
         const result = await identifyPlant(base64);
-        console.log("Identification successful", result);
+
+        if (!result.isPlant) {
+          setUploadError({ kind: 'not_a_plant' });
+          return;
+        }
+
         setAnalysisResult(result);
         setSelectedLocation(result.location ?? 'indoor');
         setManualOverride(null);
@@ -229,8 +237,10 @@ function AppContent() {
         setView('result');
       } catch (error) {
         console.error("Analysis failed", error);
-        alert("Failed to analyze plant: " + (error instanceof Error ? error.message : "Unknown error"));
-        setView('dashboard');
+        setUploadError({
+          kind: 'api_error',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
       }
     };
     reader.readAsDataURL(file);
@@ -615,19 +625,64 @@ function AppContent() {
           )}
 
           {view === 'analyzing' && (
-            <motion.div 
+            <motion.div
               key="analyzing"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="flex flex-col items-center justify-center py-20 text-center"
             >
-              <div className="relative mb-8">
-                <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center shadow-lg border-2 border-clay shadow-stone/5 animate-pulse">
-                  <div className="w-12 h-12 border-4 border-terracotta border-t-transparent rounded-full animate-spin"></div>
-                </div>
-              </div>
-              <h2 className="text-xl font-serif font-bold text-moss">{loadingMessage}</h2>
-              <p className="mt-2 text-stone/50 text-sm max-w-[240px]">CV Engine analyzing leaf structure and browning patterns</p>
+              <AnimatePresence mode="wait">
+                {uploadError ? (
+                  <motion.div
+                    key="upload-error"
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    className="flex flex-col items-center w-full"
+                  >
+                    <div className="w-24 h-24 rounded-full bg-terracotta/10 border-2 border-terracotta/20 flex items-center justify-center mb-6">
+                      <ImageOff size={36} className="text-terracotta" />
+                    </div>
+                    <h2 className="font-serif text-xl font-bold text-stone mb-2">
+                      {uploadError.kind === 'not_a_plant' ? "That doesn't look like a plant" : 'Analysis failed'}
+                    </h2>
+                    <p className="text-stone/60 text-sm max-w-[260px] mx-auto mb-8">
+                      {uploadError.kind === 'not_a_plant'
+                        ? 'Try a clear photo of leaves, flowers, or stems. Animals, objects, and food aren\'t supported.'
+                        : uploadError.message}
+                    </p>
+                    <button
+                      onClick={() => { setUploadError(null); setCurrentImage(null); setView('add'); }}
+                      className="min-h-[44px] w-full bg-terracotta text-white rounded-2xl font-bold uppercase text-sm tracking-wide"
+                    >
+                      Try another photo
+                    </button>
+                    <button
+                      onClick={() => { setUploadError(null); setCurrentImage(null); setView('dashboard'); }}
+                      className="min-h-[44px] w-full mt-3 border-2 border-moss/20 text-moss rounded-2xl font-bold uppercase text-sm tracking-wide"
+                    >
+                      Back to garden
+                    </button>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="spinner"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col items-center"
+                  >
+                    <div className="relative mb-8">
+                      <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center shadow-lg border-2 border-clay shadow-stone/5 animate-pulse">
+                        <div className="w-12 h-12 border-4 border-terracotta border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    </div>
+                    <h2 className="text-xl font-serif font-bold text-moss">{loadingMessage}</h2>
+                    <p className="mt-2 text-stone/50 text-sm max-w-[240px]">CV Engine analyzing leaf structure and browning patterns</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
 
