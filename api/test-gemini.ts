@@ -1,4 +1,4 @@
-import { callGemini, MODEL } from "./_gemini";
+import { callGemini, MODEL } from "../lib/gemini";
 
 export default async function handler(req: any, res: any) {
   try {

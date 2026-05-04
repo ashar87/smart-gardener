@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { callGemini, MODEL, GROWTH_SCHEMA } from "./_gemini";
+import { callGemini, MODEL, GROWTH_SCHEMA } from "../lib/gemini";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
