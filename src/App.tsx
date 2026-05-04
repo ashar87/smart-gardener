@@ -17,7 +17,6 @@ import CalendarView from './components/CalendarView';
 import SettingsView from './components/SettingsView';
 import { filterPlantsByLocation, parseFrequencyToDays, calculateNextSeasonalCareDate } from './utils/calendarUtils';
 import { setTimeOnDate } from './utils/timeUtils';
-import { migrateAllPlants } from './utils/migrateCareSchedule';
 
 const compressImage = (base64: string, maxWidth = 800, quality = 0.6): Promise<string> => {
   return new Promise((resolve, reject) => {

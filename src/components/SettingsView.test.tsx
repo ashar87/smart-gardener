@@ -100,9 +100,9 @@ describe('SettingsView — rendering', () => {
 describe('SettingsView — notification toggle', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('shows "Watering Reminders" label', () => {
+  it('shows "Reminders" label', () => {
     renderSettings();
-    expect(screen.getByText('Watering Reminders')).toBeInTheDocument();
+    expect(screen.getByText('Reminders')).toBeInTheDocument();
   });
 
   it('calls onToggleNotifications when the toggle is clicked', () => {

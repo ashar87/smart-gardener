@@ -7,10 +7,9 @@ interface SettingsViewProps {
   onToggleNotifications: () => void;
   preferredTime: string;
   onTimeChange: (time: string) => void;
-  onRunMigration?: () => void;
 }
 
-export default function SettingsView({ notificationsEnabled, onToggleNotifications, preferredTime, onTimeChange, onRunMigration }: SettingsViewProps) {
+export default function SettingsView({ notificationsEnabled, onToggleNotifications, preferredTime, onTimeChange }: SettingsViewProps) {
   const { currentUser, logout } = useAuth();
 
   return (
@@ -44,8 +43,8 @@ export default function SettingsView({ notificationsEnabled, onToggleNotificatio
               {notificationsEnabled ? <Bell size={18} /> : <BellOff size={18} />}
             </div>
             <div>
-              <div className="text-sm font-bold text-stone">Watering Reminders</div>
-              <div className="text-[11px] text-stone/50">Get notified when plants need water</div>
+              <div className="text-sm font-bold text-stone">Reminders</div>
+              <div className="text-[11px] text-stone/50">Get notified when plants need care</div>
             </div>
           </div>
           <button
@@ -108,22 +107,6 @@ export default function SettingsView({ notificationsEnabled, onToggleNotificatio
           </div>
         </div>
       </div>
-
-      {/* Advanced Settings */}
-      {onRunMigration && (
-        <div className="bg-white rounded-3xl border border-moss/5 shadow-sm overflow-hidden p-5">
-          <h3 className="text-sm font-bold text-stone mb-2">Advanced</h3>
-          <p className="text-[11px] text-stone/50 mb-4">
-            If you have plants added before the seasonal updates, you can migrate their data to support smart pruning and fertilizing reminders.
-          </p>
-          <button
-            onClick={onRunMigration}
-            className="w-full bg-moss/10 text-moss font-bold text-xs py-3 rounded-xl hover:bg-moss/20 transition-colors"
-          >
-            Migrate Legacy Data
-          </button>
-        </div>
-      )}
 
       {/* Sign Out */}
       <button
