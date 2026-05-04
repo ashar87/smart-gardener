@@ -1,68 +1,61 @@
-import { GoogleGenAI, Type } from "@google/genai";
-
-export const getAi = () =>
-  new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 export const MODEL = "gemini-2.0-flash";
 
 export const RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
+  type: "OBJECT",
   properties: {
     isPlant: {
-      type: Type.BOOLEAN,
+      type: "BOOLEAN",
       description:
         "true if the image clearly shows a plant, tree, flower, moss, fungi, or other botanical organism. false for animals, people, objects, food, or landscapes with no identifiable plant.",
     },
-    species: { type: Type.STRING, description: "Scientific name of the plant" },
-    commonName: { type: Type.STRING, description: "Common name of the plant" },
-    confidence: { type: Type.NUMBER, description: "Confidence score 0-1" },
+    species: { type: "STRING", description: "Scientific name of the plant" },
+    commonName: { type: "STRING", description: "Common name of the plant" },
+    confidence: { type: "NUMBER", description: "Confidence score 0-1" },
     health: {
-      type: Type.OBJECT,
+      type: "OBJECT",
       properties: {
-        status: { type: Type.STRING, enum: ["healthy", "warning", "critical"] },
-        assessment: { type: Type.STRING, description: "Detailed health assessment" },
+        status: { type: "STRING", enum: ["healthy", "warning", "critical"] },
+        assessment: { type: "STRING", description: "Detailed health assessment" },
         issues: {
-          type: Type.ARRAY,
-          items: { type: Type.STRING },
+          type: "ARRAY",
+          items: { type: "STRING" },
           description: "Specific identified issues",
         },
       },
       required: ["status", "assessment", "issues"],
     },
     location: {
-      type: Type.STRING,
+      type: "STRING",
       enum: ["indoor", "outdoor"],
       description: "Whether this plant is typically kept indoors or outdoors.",
     },
     careSuggestions: {
-      type: Type.OBJECT,
+      type: "OBJECT",
       properties: {
         watering: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            frequency: {
-              type: Type.STRING,
-              description: "Watering frequency (e.g. 'Every 3 days')",
-            },
+            frequency: { type: "STRING", description: "Watering frequency (e.g. 'Every 3 days')" },
           },
           required: ["frequency"],
         },
-        sunlight: { type: Type.STRING },
+        sunlight: { type: "STRING" },
         fertilizer: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            instructions: { type: Type.STRING },
-            frequencyDays: { type: Type.INTEGER },
-            activeMonths: { type: Type.ARRAY, items: { type: Type.INTEGER } },
+            instructions: { type: "STRING" },
+            frequencyDays: { type: "INTEGER" },
+            activeMonths: { type: "ARRAY", items: { type: "INTEGER" } },
           },
           required: ["instructions", "frequencyDays", "activeMonths"],
         },
         pruning: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            instructions: { type: Type.STRING },
-            frequencyDays: { type: Type.INTEGER },
-            activeMonths: { type: Type.ARRAY, items: { type: Type.INTEGER } },
+            instructions: { type: "STRING" },
+            frequencyDays: { type: "INTEGER" },
+            activeMonths: { type: "ARRAY", items: { type: "INTEGER" } },
           },
           required: ["instructions", "frequencyDays", "activeMonths"],
         },
@@ -70,26 +63,48 @@ export const RESPONSE_SCHEMA = {
       required: ["watering", "sunlight", "fertilizer", "pruning"],
     },
   },
-  required: [
-    "isPlant",
-    "species",
-    "commonName",
-    "confidence",
-    "location",
-    "health",
-    "careSuggestions",
-  ],
+  required: ["isPlant", "species", "commonName", "confidence", "location", "health", "careSuggestions"],
 };
 
 export const GROWTH_SCHEMA = {
-  type: Type.OBJECT,
+  type: "OBJECT",
   properties: {
-    status: { type: Type.STRING, description: "Short status summary" },
-    description: { type: Type.STRING, description: "Comparison analysis" },
-    growthDetected: { type: Type.BOOLEAN },
+    status: { type: "STRING", description: "Short status summary" },
+    description: { type: "STRING", description: "Comparison analysis" },
+    growthDetected: { type: "BOOLEAN" },
   },
   required: ["status", "description", "growthDetected"],
 };
+
+export interface GeminiBody {
+  contents: object[];
+  generationConfig?: object;
+  systemInstruction?: object;
+}
+
+export async function callGemini(model: string, body: GeminiBody): Promise<string> {
+  const key = process.env.GEMINI_API_KEY || "";
+  const url = `${GEMINI_BASE}/${model}:generateContent?key=${key}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { error?: { message?: string } };
+    throw new Error(err.error?.message || `Gemini API error ${res.status}`);
+  }
+
+  const data = await res.json() as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[];
+  };
+
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("AI returned an empty response.");
+  return text;
+}
 
 export const isTransient = (error: unknown): boolean => {
   const msg = error instanceof Error ? error.message : String(error);
@@ -97,6 +112,7 @@ export const isTransient = (error: unknown): boolean => {
     msg.includes("503") ||
     msg.includes("UNAVAILABLE") ||
     msg.includes("429") ||
-    msg.includes("RESOURCE_EXHAUSTED")
+    msg.includes("RESOURCE_EXHAUSTED") ||
+    msg.includes("quota")
   );
 };

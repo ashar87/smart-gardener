@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getAi, MODEL, RESPONSE_SCHEMA } from "./_gemini";
+import { callGemini, MODEL, RESPONSE_SCHEMA } from "./_gemini";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -11,40 +11,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   };
   if (!image || !commonName) return res.status(400).json({ error: "Missing image or commonName" });
 
-  const ai = getAi();
-
   const mimeMatch = image.match(/^data:([^;]+);base64,/);
-  const mimeType = (mimeMatch?.[1] as "image/jpeg" | "image/png" | "image/webp") ?? "image/jpeg";
+  const mimeType = mimeMatch?.[1] ?? "image/jpeg";
   const imageData = image.split(",")[1] || image;
 
   try {
-    const response = await ai.models.generateContent({
-      model: MODEL,
+    const text = await callGemini(MODEL, {
       contents: [
         {
           role: "user",
           parts: [
-            { inlineData: { data: imageData, mimeType } },
+            { inline_data: { mime_type: mimeType, data: imageData } },
             {
               text: `The user has confirmed this plant is "${commonName}" (${species || commonName}). Do NOT re-identify the species. Use the image only to assess health and return accurate care instructions for this confirmed species.`,
             },
           ],
         },
       ],
-      config: {
+      generationConfig: {
         responseMimeType: "application/json",
         responseSchema: RESPONSE_SCHEMA,
-        systemInstruction: `You are an expert botanist. The species has been confirmed as "${commonName}" (${species || commonName}). Do NOT re-identify or override this. Assess the plant's health from the photo and return accurate care instructions for ${commonName}.`,
+      },
+      systemInstruction: {
+        parts: [
+          {
+            text: `You are an expert botanist. The species has been confirmed as "${commonName}" (${species || commonName}). Do NOT re-identify or override this. Assess the plant's health from the photo and return accurate care instructions for ${commonName}.`,
+          },
+        ],
       },
     });
 
-    if (!response.text) throw new Error("AI returned an empty response.");
-    const result = JSON.parse(response.text);
+    const result = JSON.parse(text);
     result.commonName = commonName;
     result.species = species || result.species;
     return res.json(result);
   } catch (error) {
-    console.error("reanalyze error:", error);
-    return res.status(500).json({ error: "Reanalysis failed." });
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("reanalyze error:", msg);
+    return res.status(500).json({ error: `Reanalysis failed: ${msg}` });
   }
 }
