@@ -90,7 +90,10 @@ const Onboarding: React.FC = () => {
         </button>
       </p>
       <p className="text-xs text-stone/40 mt-10 text-center max-w-xs">
-        By continuing, you agree to our Terms of Service and Privacy Policy.
+        By continuing, you agree to our{' '}
+        <a href="/terms-of-service.html" target="_blank" rel="noopener noreferrer" className="underline text-moss/60 hover:text-moss">Terms of Service</a>
+        {' '}and{' '}
+        <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="underline text-moss/60 hover:text-moss">Privacy Policy</a>.
       </p>
     </>
   );

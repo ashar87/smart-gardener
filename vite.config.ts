@@ -8,16 +8,19 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [react(), tailwindcss()],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
     },
     server: {
+      port: 3000,
       hmr: process.env.DISABLE_HMR !== 'true',
+      proxy: {
+        '/identify': 'http://127.0.0.1:5001/smart-gardener-53b16/us-central1',
+        '/reanalyze': 'http://127.0.0.1:5001/smart-gardener-53b16/us-central1',
+        '/growth': 'http://127.0.0.1:5001/smart-gardener-53b16/us-central1',
+      },
     },
     build: {
       rollupOptions: {
@@ -25,7 +28,6 @@ export default defineConfig(({ mode }) => {
           manualChunks: {
             vendor: ['react', 'react-dom'],
             firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
-            ai: ['@google/genai'],
           },
         },
       },

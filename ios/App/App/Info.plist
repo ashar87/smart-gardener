@@ -47,5 +47,9 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Smart Gardener uses your camera to identify plants and track their growth over time.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Smart Gardener needs access to your photo library to select plant images for identification.</string>
 </dict>
 </plist>
