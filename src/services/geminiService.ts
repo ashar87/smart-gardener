@@ -49,10 +49,26 @@ const RESPONSE_SCHEMA = {
           required: ["frequency"]
         },
         sunlight: { type: Type.STRING },
-        fertilizer: { type: Type.STRING },
-        pruning: { type: Type.STRING }
+        fertilizer: {
+          type: Type.OBJECT,
+          properties: {
+            instructions: { type: Type.STRING, description: "Detailed fertilizer instructions" },
+            frequencyDays: { type: Type.INTEGER, description: "Frequency in days between applications (e.g., 30 for monthly)" },
+            activeMonths: { type: Type.ARRAY, items: { type: Type.INTEGER }, description: "Months (1-12) when this care should be performed. Assume Northern Hemisphere." }
+          },
+          required: ["instructions", "frequencyDays", "activeMonths"]
+        },
+        pruning: {
+          type: Type.OBJECT,
+          properties: {
+            instructions: { type: Type.STRING, description: "Detailed pruning instructions" },
+            frequencyDays: { type: Type.INTEGER, description: "Frequency in days between prunings (e.g., 90 for quarterly)" },
+            activeMonths: { type: Type.ARRAY, items: { type: Type.INTEGER }, description: "Months (1-12) when this care should be performed. Assume Northern Hemisphere." }
+          },
+          required: ["instructions", "frequencyDays", "activeMonths"]
+        }
       },
-      required: ["watering", "sunlight"]
+      required: ["watering", "sunlight", "fertilizer", "pruning"]
     }
   },
   required: ["isPlant", "species", "commonName", "confidence", "location", "health", "careSuggestions"]
@@ -91,7 +107,7 @@ export async function identifyPlant(base64Image: string): Promise<Identification
               }
             },
             {
-              text: "Identify this plant, assess its health, and predict whether it is typically an indoor or outdoor plant. Provide detailed care instructions in JSON format."
+              text: "Identify this plant, assess its health, and predict whether it is typically an indoor or outdoor plant. Provide detailed care instructions in JSON format. For fertilizer and pruning, provide the instructions, the frequency in days, and an array of integers (1-12) representing the active months when this care is required (assuming Northern Hemisphere seasons)."
             }
           ]
         },

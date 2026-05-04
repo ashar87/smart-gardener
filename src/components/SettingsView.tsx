@@ -5,9 +5,12 @@ import { useAuth } from '../contexts/AuthContext';
 interface SettingsViewProps {
   notificationsEnabled: boolean;
   onToggleNotifications: () => void;
+  preferredTime: string;
+  onTimeChange: (time: string) => void;
+  onRunMigration?: () => void;
 }
 
-export default function SettingsView({ notificationsEnabled, onToggleNotifications }: SettingsViewProps) {
+export default function SettingsView({ notificationsEnabled, onToggleNotifications, preferredTime, onTimeChange, onRunMigration }: SettingsViewProps) {
   const { currentUser, logout } = useAuth();
 
   return (
@@ -61,6 +64,28 @@ export default function SettingsView({ notificationsEnabled, onToggleNotificatio
           </button>
         </div>
 
+        {/* Time Picker */}
+        <div className="p-5 flex items-center justify-between border-b border-moss/5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-moss/10 flex items-center justify-center text-moss">
+              <span className="text-sm">⏰</span>
+            </div>
+            <div>
+              <div className="text-sm font-bold text-stone">Reminder Time</div>
+              <div className="text-[11px] text-stone/50">When do you want to be notified?</div>
+            </div>
+          </div>
+          <input
+            type="time"
+            value={preferredTime}
+            onChange={(e) => onTimeChange(e.target.value)}
+            disabled={!notificationsEnabled}
+            className={`font-bold text-sm bg-sand px-3 py-1.5 rounded-lg border border-moss/10 focus:outline-none focus:ring-2 focus:ring-moss/20 ${
+              !notificationsEnabled ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          />
+        </div>
+
         {/* App Info */}
         <div className="p-5 flex items-center gap-3 border-b border-moss/5">
           <div className="w-9 h-9 rounded-xl bg-moss/10 flex items-center justify-center text-moss">
@@ -83,6 +108,22 @@ export default function SettingsView({ notificationsEnabled, onToggleNotificatio
           </div>
         </div>
       </div>
+
+      {/* Advanced Settings */}
+      {onRunMigration && (
+        <div className="bg-white rounded-3xl border border-moss/5 shadow-sm overflow-hidden p-5">
+          <h3 className="text-sm font-bold text-stone mb-2">Advanced</h3>
+          <p className="text-[11px] text-stone/50 mb-4">
+            If you have plants added before the seasonal updates, you can migrate their data to support smart pruning and fertilizing reminders.
+          </p>
+          <button
+            onClick={onRunMigration}
+            className="w-full bg-moss/10 text-moss font-bold text-xs py-3 rounded-xl hover:bg-moss/20 transition-colors"
+          >
+            Migrate Legacy Data
+          </button>
+        </div>
+      )}
 
       {/* Sign Out */}
       <button

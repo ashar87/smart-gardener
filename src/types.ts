@@ -45,6 +45,14 @@ export interface PlantHealth {
   issues: string[];
 }
 
+export interface SeasonalCare {
+  instructions: string;
+  frequencyDays: number;
+  activeMonths: number[];
+  lastCompleted?: number;
+  nextScheduled?: number;
+}
+
 export interface CareSchedule {
   watering: {
     frequency: string;
@@ -52,8 +60,8 @@ export interface CareSchedule {
     nextWatered: number;
   };
   sunlight: string;
-  fertilizer?: string;
-  pruning?: string;
+  fertilizer?: SeasonalCare | string; // keeping string temporarily for legacy data compatibility
+  pruning?: SeasonalCare | string;
 }
 
 export interface IdentificationResult {

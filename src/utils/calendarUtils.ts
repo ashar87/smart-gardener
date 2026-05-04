@@ -77,3 +77,79 @@ export function filterPlantsByLocation(
   if (filter === 'all') return plants;
   return plants.filter(p => p.location === filter);
 }
+
+/**
+ * Parses a natural language frequency string (e.g. from Gemini AI) into a number of days.
+ * Defaults to 7 days if the string cannot be parsed.
+ */
+export function parseFrequencyToDays(frequencyString: string): number {
+  if (!frequencyString) return 7;
+  
+  const lower = frequencyString.toLowerCase();
+
+  // Explicit day counts
+  const dayMatch = lower.match(/every (\d+) days?/);
+  if (dayMatch && dayMatch[1]) {
+    return parseInt(dayMatch[1], 10);
+  }
+
+  // Week matching - check bi-weekly first so 'weekly' doesn't greedily match it
+  if (lower.includes('bi-weekly') || lower.includes('every 2 weeks') || lower.includes('every two weeks')) return 14;
+  if (lower.includes('twice a week') || lower.includes('2 times a week')) return 3;
+  if (lower.includes('weekly') || lower.includes('once a week') || lower.includes('every week')) return 7;
+  
+  // Month matching
+  if (lower.includes('monthly') || lower.includes('once a month') || lower.includes('every month')) return 30;
+  
+  // Daily matching
+  if (lower.includes('daily') || lower.includes('every day')) return 1;
+
+  // Fallback
+  return 7;
+}
+
+/**
+ * Calculates the next seasonal care date (e.g. fertilizing) based on the last completed date, 
+ * the frequency in days, and the active months (1-12).
+ * If the calculated date falls in an active month, it returns that date.
+ * If it falls in an inactive month, it fast-forwards to the 1st day of the next active month.
+ */
+export function calculateNextSeasonalCareDate(
+  lastCompleted: number,
+  frequencyDays: number,
+  activeMonths: number[]
+): number {
+  if (!activeMonths || activeMonths.length === 0) {
+    // Fallback if no active months are provided
+    return lastCompleted + frequencyDays * 24 * 60 * 60 * 1000;
+  }
+
+  // Calculate the simple next date
+  const nextDate = new Date(lastCompleted + frequencyDays * 24 * 60 * 60 * 1000);
+  const nextMonth = nextDate.getMonth() + 1; // 1-12
+
+  if (activeMonths.includes(nextMonth)) {
+    return nextDate.getTime();
+  }
+
+  // Not in an active month, so find the *next* active month chronologically
+  const sortedMonths = [...activeMonths].sort((a, b) => a - b);
+  
+  // Find the first active month that comes after our target month
+  let targetMonth = sortedMonths.find(m => m > nextMonth);
+  let targetYear = nextDate.getFullYear();
+
+  if (targetMonth === undefined) {
+    // If we're past all active months for this year (e.g., it's October, active is [3,4,5]),
+    // we wrap around to the first active month of the NEXT year.
+    targetMonth = sortedMonths[0];
+    targetYear += 1;
+  }
+
+  // Set the date to the 1st of the target month
+  const adjustedDate = new Date(targetYear, targetMonth - 1, 1);
+  // Keep the same time of day as the original calculation
+  adjustedDate.setHours(nextDate.getHours(), nextDate.getMinutes(), 0, 0);
+
+  return adjustedDate.getTime();
+}

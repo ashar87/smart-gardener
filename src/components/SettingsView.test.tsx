@@ -38,11 +38,18 @@ import SettingsView from './SettingsView';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function renderSettings(notificationsEnabled = false, onToggle = vi.fn()) {
+function renderSettings(
+  notificationsEnabled = false,
+  onToggle = vi.fn(),
+  preferredTime = '09:00',
+  onTimeChange = vi.fn()
+) {
   return render(
     <SettingsView
       notificationsEnabled={notificationsEnabled}
       onToggleNotifications={onToggle}
+      preferredTime={preferredTime}
+      onTimeChange={onTimeChange}
     />
   );
 }
@@ -112,6 +119,35 @@ describe('SettingsView — notification toggle', () => {
     fireEvent.click(toggle);
     fireEvent.click(toggle);
     expect(onToggle).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ─── Time picker ──────────────────────────────────────────────────────────────
+
+describe('SettingsView — time picker', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renders the time picker input with the current preferred time', () => {
+    renderSettings(true, vi.fn(), '08:30');
+    const input = screen.getByDisplayValue('08:30');
+    expect(input).toBeInTheDocument();
+    expect(input).toHaveAttribute('type', 'time');
+  });
+
+  it('disables the time picker if notifications are off', () => {
+    renderSettings(false, vi.fn(), '08:30');
+    const input = screen.getByDisplayValue('08:30');
+    expect(input).toBeDisabled();
+  });
+
+  it('calls onTimeChange when the time is updated', () => {
+    const onTimeChange = vi.fn();
+    renderSettings(true, vi.fn(), '08:30', onTimeChange);
+    
+    const input = screen.getByDisplayValue('08:30');
+    fireEvent.change(input, { target: { value: '14:15' } });
+    
+    expect(onTimeChange).toHaveBeenCalledWith('14:15');
   });
 });
 

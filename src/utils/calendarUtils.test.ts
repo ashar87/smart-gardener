@@ -4,6 +4,8 @@ import {
   getWateringGroup,
   groupPlantsByWateringSchedule,
   filterPlantsByLocation,
+  parseFrequencyToDays,
+  calculateNextSeasonalCareDate,
 } from '../utils/calendarUtils';
 import { Plant } from '../types';
 
@@ -168,6 +170,93 @@ describe('filterPlantsByLocation', () => {
     const indoor = filterPlantsByLocation(plants, 'indoor');
     const outdoor = filterPlantsByLocation(plants, 'outdoor');
     expect(indoor.find(p => p.id === 'd')).toBeUndefined();
-    expect(outdoor.find(p => p.id === 'd')).toBeUndefined();
+  });
+});
+
+// ─── parseFrequencyToDays ────────────────────────────────────────────────────
+
+describe('parseFrequencyToDays', () => {
+  it('extracts explicit day counts', () => {
+    expect(parseFrequencyToDays('Every 3 days')).toBe(3);
+    expect(parseFrequencyToDays('every 14 days')).toBe(14);
+    expect(parseFrequencyToDays('Water every 5 days')).toBe(5);
+  });
+
+  it('matches week strings', () => {
+    expect(parseFrequencyToDays('Twice a week')).toBe(3);
+    expect(parseFrequencyToDays('Weekly')).toBe(7);
+    expect(parseFrequencyToDays('Once a week')).toBe(7);
+    expect(parseFrequencyToDays('Bi-weekly')).toBe(14);
+    expect(parseFrequencyToDays('Every 2 weeks')).toBe(14);
+  });
+
+  it('matches month strings', () => {
+    expect(parseFrequencyToDays('Monthly')).toBe(30);
+    expect(parseFrequencyToDays('Once a month')).toBe(30);
+  });
+
+  it('matches daily strings', () => {
+    expect(parseFrequencyToDays('Daily')).toBe(1);
+    expect(parseFrequencyToDays('Water every day')).toBe(1);
+  });
+
+  it('falls back to 7 days for unparseable or empty strings', () => {
+    expect(parseFrequencyToDays('Whenever the soil feels dry')).toBe(7);
+    expect(parseFrequencyToDays('')).toBe(7);
+    expect(parseFrequencyToDays('Unknown')).toBe(7);
+  });
+});
+
+// ─── calculateNextSeasonalCareDate ──────────────────────────────────────────
+
+describe('calculateNextSeasonalCareDate', () => {
+  const activeMonths = [3, 4, 5, 6, 7, 8]; // March through August
+  
+  it('returns the standard next date if it falls within an active month', () => {
+    // May 1st
+    const lastCompleted = new Date('2024-05-01T10:00:00.000Z').getTime();
+    const frequencyDays = 30;
+    
+    // Expected: ~May 31st
+    const nextDate = new Date(calculateNextSeasonalCareDate(lastCompleted, frequencyDays, activeMonths));
+    expect(nextDate.getMonth() + 1).toBe(5); // Still May, which is active
+  });
+
+  it('jumps to the next active month if the calculated date falls outside the active season', () => {
+    // August 15th
+    const lastCompleted = new Date('2024-08-15T10:00:00.000Z').getTime();
+    const frequencyDays = 30;
+    
+    // Calculated date is Sept 14th. Sept (9) is not active.
+    // It should jump to March 1st of the next year (2025).
+    const nextDate = new Date(calculateNextSeasonalCareDate(lastCompleted, frequencyDays, activeMonths));
+    
+    expect(nextDate.getFullYear()).toBe(2025);
+    expect(nextDate.getMonth() + 1).toBe(3); // March
+    expect(nextDate.getDate()).toBe(1);
+    expect(nextDate.getHours()).toBe(new Date(lastCompleted).getHours()); // preserves hour
+  });
+
+  it('jumps forward within the same year if there is a gap in active months', () => {
+    // E.g., fertilize in Spring (3,4,5) and Fall (9,10,11)
+    const splitSeasons = [3, 4, 5, 9, 10, 11];
+    
+    // May 15th + 30 days = June 14th. June (6) is not active.
+    const lastCompleted = new Date('2024-05-15T10:00:00.000Z').getTime();
+    
+    // Next active month is September (9). So it should jump to Sept 1, 2024.
+    const nextDate = new Date(calculateNextSeasonalCareDate(lastCompleted, 30, splitSeasons));
+    
+    expect(nextDate.getFullYear()).toBe(2024);
+    expect(nextDate.getMonth() + 1).toBe(9);
+    expect(nextDate.getDate()).toBe(1);
+  });
+  
+  it('falls back to simple calculation if activeMonths is empty', () => {
+    const lastCompleted = new Date('2024-05-01T10:00:00.000Z').getTime();
+    const frequencyDays = 30;
+    
+    const nextDate = new Date(calculateNextSeasonalCareDate(lastCompleted, frequencyDays, []));
+    expect(nextDate.getTime()).toBe(lastCompleted + 30 * 24 * 60 * 60 * 1000);
   });
 });

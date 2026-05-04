@@ -39,7 +39,7 @@ export const scheduleWateringNotification = async (plant: Plant, enabled: boolea
           {
             title: 'Watering Reminder',
             body: `Your ${plant.commonName} needs water!`,
-            id: plant.id.charCodeAt(0) + plant.id.charCodeAt(plant.id.length - 1), // Generate simple int ID
+            id: getNotificationId(plant.id, 'watering'),
             schedule: { at: nextWaterTime },
             sound: undefined,
             attachments: null,
@@ -69,7 +69,58 @@ export const scheduleWateringNotification = async (plant: Plant, enabled: boolea
 
 export const cancelWateringNotification = async (plantId: string) => {
   if (Capacitor.isNativePlatform()) {
-    const id = plantId.charCodeAt(0) + plantId.charCodeAt(plantId.length - 1);
+    const id = getNotificationId(plantId, 'watering');
+    await LocalNotifications.cancel({ notifications: [{ id }] });
+  }
+};
+
+const getNotificationId = (plantId: string, type: 'watering' | 'fertilizing' | 'pruning'): number => {
+  const baseId = plantId.charCodeAt(0) + plantId.charCodeAt(plantId.length - 1);
+  if (type === 'fertilizing') return baseId + 10000;
+  if (type === 'pruning') return baseId + 20000;
+  return baseId; // watering
+};
+
+export const scheduleSeasonalNotification = async (plant: Plant, type: 'fertilizing' | 'pruning', enabled: boolean) => {
+  await cancelSeasonalNotification(plant.id, type);
+
+  if (!enabled || !plant.reminders?.pruningFertilizing) return;
+
+  const seasonalCare = type === 'fertilizing' ? plant.careSchedule.fertilizer : plant.careSchedule.pruning;
+  if (typeof seasonalCare !== 'object' || !seasonalCare.nextScheduled) return;
+
+  const nextTime = new Date(seasonalCare.nextScheduled);
+  const now = new Date();
+
+  if (nextTime.getTime() > now.getTime()) {
+    const title = type === 'fertilizing' ? 'Fertilizing Reminder' : 'Pruning Reminder';
+    const action = type === 'fertilizing' ? 'needs fertilizer' : 'needs pruning';
+    
+    if (Capacitor.isNativePlatform()) {
+      await LocalNotifications.schedule({
+        notifications: [{
+          title,
+          body: `Your ${plant.commonName} ${action}!`,
+          id: getNotificationId(plant.id, type),
+          schedule: { at: nextTime },
+        }]
+      });
+    } else {
+      const delay = nextTime.getTime() - now.getTime();
+      if (delay < 2147483647) {
+        setTimeout(() => {
+          if (Notification.permission === 'granted') {
+            new Notification(title, { body: `Your ${plant.commonName} ${action}!`, icon: '/favicon.ico' });
+          }
+        }, delay);
+      }
+    }
+  }
+};
+
+export const cancelSeasonalNotification = async (plantId: string, type: 'fertilizing' | 'pruning') => {
+  if (Capacitor.isNativePlatform()) {
+    const id = getNotificationId(plantId, type);
     await LocalNotifications.cancel({ notifications: [{ id }] });
   }
 };

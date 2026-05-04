@@ -8,14 +8,16 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Leaf, Calendar, Camera, Info, Check, Trash2, HeartPulse, Droplets, Sprout, Scissors, Bell, BellOff, History, Sparkles, ArrowLeftRight, Image as ImageIcon, ArrowLeft, LogOut, ImageOff } from 'lucide-react';
 import { Plant, IdentificationResult, CareEvent, GrowthMilestone } from './types';
 import { identifyPlant, analyzeGrowth, reanalyzeWithCorrectName } from './services/geminiService';
-import { requestNotificationPermission, scheduleWateringNotification, cancelWateringNotification } from './services/notificationService';
+import { requestNotificationPermission, scheduleWateringNotification, cancelWateringNotification, scheduleSeasonalNotification, cancelSeasonalNotification } from './services/notificationService';
 import { uploadPlantImage, syncPlantToCloud, deletePlantFromCloud, subscribeToPlants } from './services/cloudSync';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Onboarding from './components/Onboarding';
 import BottomNav, { Tab } from './components/BottomNav';
 import CalendarView from './components/CalendarView';
 import SettingsView from './components/SettingsView';
-import { filterPlantsByLocation } from './utils/calendarUtils';
+import { filterPlantsByLocation, parseFrequencyToDays, calculateNextSeasonalCareDate } from './utils/calendarUtils';
+import { setTimeOnDate } from './utils/timeUtils';
+import { migrateAllPlants } from './utils/migrateCareSchedule';
 
 const compressImage = (base64: string, maxWidth = 800, quality = 0.6): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -129,6 +131,7 @@ function AppContent() {
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
   const [loadingMessage, setLoadingMessage] = useState('Identifying species...');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [preferredNotificationTime, setPreferredNotificationTime] = useState('09:00');
   const [compareMode, setCompareMode] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [selectedLocation, setSelectedLocation] = useState<'indoor' | 'outdoor'>('indoor');
@@ -163,21 +166,56 @@ function AppContent() {
   useEffect(() => {
     const savedNotifs = localStorage.getItem('smart-gardener-notifications');
     if (savedNotifs === 'true') setNotificationsEnabled(true);
+    
+    const savedTime = localStorage.getItem('smart-gardener-notif-time');
+    if (savedTime) setPreferredNotificationTime(savedTime);
   }, []);
 
   useEffect(() => {
     localStorage.setItem('smart-gardener-notifications', notificationsEnabled.toString());
   }, [notificationsEnabled]);
+  
+  useEffect(() => {
+    localStorage.setItem('smart-gardener-notif-time', preferredNotificationTime);
+  }, [preferredNotificationTime]);
 
   useEffect(() => {
     plants.forEach(plant => {
       if (notificationsEnabled) {
-        scheduleWateringNotification(plant, true);
+        // Create a copy of the plant with the nextWatered timestamp adjusted to the preferred time
+        // just for scheduling the notification, without mutating the database object.
+        const notifPlant = { ...plant };
+        
+        if (plant.careSchedule?.watering?.nextWatered) {
+          notifPlant.careSchedule.watering.nextWatered = setTimeOnDate(
+            plant.careSchedule.watering.nextWatered,
+            preferredNotificationTime
+          );
+        }
+        scheduleWateringNotification(notifPlant, true);
+
+        if (typeof plant.careSchedule?.fertilizer === 'object' && plant.careSchedule.fertilizer.nextScheduled) {
+          notifPlant.careSchedule.fertilizer = {
+            ...plant.careSchedule.fertilizer,
+            nextScheduled: setTimeOnDate(plant.careSchedule.fertilizer.nextScheduled, preferredNotificationTime)
+          };
+          scheduleSeasonalNotification(notifPlant, 'fertilizing', true);
+        }
+
+        if (typeof plant.careSchedule?.pruning === 'object' && plant.careSchedule.pruning.nextScheduled) {
+          notifPlant.careSchedule.pruning = {
+            ...plant.careSchedule.pruning,
+            nextScheduled: setTimeOnDate(plant.careSchedule.pruning.nextScheduled, preferredNotificationTime)
+          };
+          scheduleSeasonalNotification(notifPlant, 'pruning', true);
+        }
       } else {
         cancelWateringNotification(plant.id);
+        cancelSeasonalNotification(plant.id, 'fertilizing');
+        cancelSeasonalNotification(plant.id, 'pruning');
       }
     });
-  }, [plants, notificationsEnabled]);
+  }, [plants, notificationsEnabled, preferredNotificationTime]);
 
   const handleNotificationToggle = async () => {
     if (!notificationsEnabled) {
@@ -252,6 +290,11 @@ function AppContent() {
     setLoadingMessage('Uploading to Cloud Garden...');
     setView('analyzing');
 
+    const freqString = manualOverride?.species ? 'Weekly' : (analysisResult.careSuggestions.watering?.frequency || 'Weekly');
+    const daysToAdd = parseFrequencyToDays(freqString);
+    let nextWateredDate = Date.now() + daysToAdd * 24 * 60 * 60 * 1000;
+    nextWateredDate = setTimeOnDate(nextWateredDate, preferredNotificationTime);
+
     const newPlant: Plant = {
       id: Math.random().toString(36).substring(7),
       species: manualOverride?.species || analysisResult.species,
@@ -264,11 +307,27 @@ function AppContent() {
         watering: {
           frequency: analysisResult.careSuggestions.watering?.frequency || 'Weekly',
           lastWatered: Date.now(),
-          nextWatered: Date.now() + 7 * 24 * 60 * 60 * 1000,
+          nextWatered: nextWateredDate,
         },
         sunlight: analysisResult.careSuggestions.sunlight || 'Medium light',
-        fertilizer: analysisResult.careSuggestions.fertilizer,
-        pruning: analysisResult.careSuggestions.pruning,
+        fertilizer: typeof analysisResult.careSuggestions.fertilizer === 'object' ? {
+          ...analysisResult.careSuggestions.fertilizer,
+          lastCompleted: Date.now(),
+          nextScheduled: setTimeOnDate(calculateNextSeasonalCareDate(
+            Date.now(), 
+            analysisResult.careSuggestions.fertilizer.frequencyDays, 
+            analysisResult.careSuggestions.fertilizer.activeMonths
+          ), preferredNotificationTime)
+        } : analysisResult.careSuggestions.fertilizer,
+        pruning: typeof analysisResult.careSuggestions.pruning === 'object' ? {
+          ...analysisResult.careSuggestions.pruning,
+          lastCompleted: Date.now(),
+          nextScheduled: setTimeOnDate(calculateNextSeasonalCareDate(
+            Date.now(), 
+            analysisResult.careSuggestions.pruning.frequencyDays, 
+            analysisResult.careSuggestions.pruning.activeMonths
+          ), preferredNotificationTime)
+        } : analysisResult.careSuggestions.pruning,
       },
       history: [],
       growthLog: [],
@@ -335,10 +394,36 @@ function AppContent() {
     
     let newCareSchedule = { ...plant.careSchedule };
     if (type === 'watering') {
+      const daysToAdd = parseFrequencyToDays(newCareSchedule.watering.frequency);
+      let nextWateredDate = Date.now() + daysToAdd * 24 * 60 * 60 * 1000;
+      nextWateredDate = setTimeOnDate(nextWateredDate, preferredNotificationTime);
+
       newCareSchedule.watering = {
         ...newCareSchedule.watering,
         lastWatered: Date.now(),
-        nextWatered: Date.now() + 7 * 24 * 60 * 60 * 1000 // Simple logic for demo
+        nextWatered: nextWateredDate
+      };
+    } else if (type === 'fertilizing' && typeof newCareSchedule.fertilizer === 'object') {
+      const nextDate = calculateNextSeasonalCareDate(
+        Date.now(),
+        newCareSchedule.fertilizer.frequencyDays,
+        newCareSchedule.fertilizer.activeMonths
+      );
+      newCareSchedule.fertilizer = {
+        ...newCareSchedule.fertilizer,
+        lastCompleted: Date.now(),
+        nextScheduled: setTimeOnDate(nextDate, preferredNotificationTime)
+      };
+    } else if (type === 'pruning' && typeof newCareSchedule.pruning === 'object') {
+      const nextDate = calculateNextSeasonalCareDate(
+        Date.now(),
+        newCareSchedule.pruning.frequencyDays,
+        newCareSchedule.pruning.activeMonths
+      );
+      newCareSchedule.pruning = {
+        ...newCareSchedule.pruning,
+        lastCompleted: Date.now(),
+        nextScheduled: setTimeOnDate(nextDate, preferredNotificationTime)
       };
     }
 
@@ -583,6 +668,18 @@ function AppContent() {
             <SettingsView
               notificationsEnabled={notificationsEnabled}
               onToggleNotifications={handleNotificationToggle}
+              preferredTime={preferredNotificationTime}
+              onTimeChange={setPreferredNotificationTime}
+              onRunMigration={async () => {
+                if (!currentUser) return;
+                try {
+                  const count = await migrateAllPlants(currentUser.uid, plants);
+                  alert(`Successfully migrated ${count} plant(s)!`);
+                } catch (e) {
+                  console.error(e);
+                  alert('Failed to migrate plants.');
+                }
+              }}
             />
           )}
 
@@ -1054,22 +1151,48 @@ function AppContent() {
                         </div>
                       </div>
 
-                      {(selectedPlant.careSchedule.fertilizer || selectedPlant.careSchedule.pruning) && (
+                      {selectedPlant.careSchedule.fertilizer && (
+                        <div className="flex gap-4 pt-6 border-t border-moss/5">
+                          <div className="w-10 h-10 bg-clay/30 rounded-2xl flex items-center justify-center shrink-0">
+                            <span className="text-moss">🧪</span>
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <div className="font-bold text-sm text-stone">Fertilizing</div>
+                            </div>
+                            {typeof selectedPlant.careSchedule.fertilizer === 'string' ? (
+                              <div className="text-xs text-stone/50">{selectedPlant.careSchedule.fertilizer}</div>
+                            ) : (
+                              <>
+                                <div className="text-xs text-stone/50">{selectedPlant.careSchedule.fertilizer.instructions}</div>
+                                {selectedPlant.careSchedule.fertilizer.nextScheduled && (
+                                  <div className="text-[10px] mt-1 text-moss font-bold">Next: {new Date(selectedPlant.careSchedule.fertilizer.nextScheduled).toLocaleDateString()}</div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedPlant.careSchedule.pruning && (
                         <div className="flex gap-4 pt-6 border-t border-moss/5">
                           <div className="w-10 h-10 bg-clay/30 rounded-2xl flex items-center justify-center shrink-0">
                             <span className="text-moss">✂️</span>
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center justify-between">
-                              <div className="font-bold text-sm text-stone">Pruning / Fertilizer</div>
-                              <button 
-                                onClick={() => toggleReminder('pruningFertilizing')}
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${selectedPlant.reminders?.pruningFertilizing ? 'bg-emerald-100 text-emerald-600' : 'bg-stone/10 text-stone/40'}`}
-                              >
-                                {selectedPlant.reminders?.pruningFertilizing ? 'Reminders On' : 'Reminders Off'}
-                              </button>
+                              <div className="font-bold text-sm text-stone">Pruning</div>
                             </div>
-                            <div className="text-xs text-stone/50">{selectedPlant.careSchedule.fertilizer || selectedPlant.careSchedule.pruning}</div>
+                            {typeof selectedPlant.careSchedule.pruning === 'string' ? (
+                              <div className="text-xs text-stone/50">{selectedPlant.careSchedule.pruning}</div>
+                            ) : (
+                              <>
+                                <div className="text-xs text-stone/50">{selectedPlant.careSchedule.pruning.instructions}</div>
+                                {selectedPlant.careSchedule.pruning.nextScheduled && (
+                                  <div className="text-[10px] mt-1 text-moss font-bold">Next: {new Date(selectedPlant.careSchedule.pruning.nextScheduled).toLocaleDateString()}</div>
+                                )}
+                              </>
+                            )}
                           </div>
                         </div>
                       )}
