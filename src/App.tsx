@@ -669,16 +669,6 @@ function AppContent() {
               onToggleNotifications={handleNotificationToggle}
               preferredTime={preferredNotificationTime}
               onTimeChange={setPreferredNotificationTime}
-              onRunMigration={async () => {
-                if (!currentUser) return;
-                try {
-                  const count = await migrateAllPlants(currentUser.uid, plants);
-                  alert(`Successfully migrated ${count} plant(s)!`);
-                } catch (e) {
-                  console.error(e);
-                  alert('Failed to migrate plants.');
-                }
-              }}
             />
           )}
 
