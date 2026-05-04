@@ -5,6 +5,5 @@
     "api/*.ts": {
       "maxDuration": 30
     }
-  },
-  "nodeVersion": "20"
+  }
 }
