@@ -86,19 +86,19 @@ The Gemini API key lives **server-side only**. The client calls a backend proxy;
 
 **Client (`src/services/geminiService.ts`)** — thin HTTP wrapper. Calls `/api/identify`, `/api/reanalyze`, `/api/growth` via `fetch`. `VITE_API_BASE_URL` prefixes the base (empty in dev — Vite proxy handles routing; set to the Vercel deployment URL in production).
 
-**Server (`api/`)** — Vercel Serverless Functions:
-- `api/identify.ts` — POSTs image to Gemini, returns `IdentificationResult`. Retries up to 3× on 503 or network errors with 1500ms × attempt backoff.
+**Server (`api/`)** — Vercel Serverless Functions. Each function calls the Gemini REST API directly via `fetch` (no SDK). **Each function must be fully self-contained** — Vercel's bundler does not resolve local relative imports at runtime; `import type` (erased at compile time) is the only safe cross-file reference.
+- `api/identify.ts` — POSTs image to Gemini, returns `IdentificationResult`. Retries up to 3× on 503/429 with 1500ms × attempt backoff.
 - `api/reanalyze.ts` — Re-runs analysis with a user-confirmed plant name; forces `commonName`/`species` onto the result.
 - `api/growth.ts` — Compares up to 3 past images against the current photo to detect growth.
-- `api/_gemini.ts` — Shared schemas (`RESPONSE_SCHEMA`, `GROWTH_SCHEMA`), model name, and `isTransient` helper. Not a route (prefixed with `_`).
 
-**`GEMINI_API_KEY`** must be set as an environment variable in the Vercel dashboard (or `functions/.env` for local emulator use).
+**Model:** Always use `gemini-flash-latest`. Do not hardcode a specific version — the `-latest` alias always resolves to the current stable Flash model.
 
-**Local dev proxy** — `vite.config.ts` proxies `/api/*` → `http://localhost:3001` (Vercel dev server). Run `npx vercel dev` on port 3001 alongside `npm run dev` for a fully local setup.
+**`GEMINI_API_KEY`** must be set as an environment variable in the Vercel dashboard.
+
+**Local dev proxy** — `vite.config.ts` proxies `/api/*` → `http://localhost:3001`. Run `npx vercel dev` on port 3001 alongside `npm run dev` for a fully local setup.
 
 **Retry / error behaviour:**
-- 503 responses → retry up to 3×; after exhaustion throws the API's error message
-- Network errors (`TypeError`) → retry up to 3×
+- 503/429/quota errors → retry up to 3× with 1500ms × attempt backoff (`identify.ts` only)
 - All other errors → throw immediately, no retry
 - `isPlant: false` in the response → `App.tsx` shows an error card, never transitions to `'result'`
 
