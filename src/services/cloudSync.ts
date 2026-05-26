@@ -15,7 +15,17 @@ export const uploadPlantImage = async (userId: string, plantId: string, base64Im
       : `users/${userId}/plants/${plantId}/main.jpg`;
       
     const storageRef = ref(storage, path);
-    await uploadString(storageRef, base64Image, 'data_url');
+    
+    // Timeout wrapper to prevent hanging on CORS or network/service worker failures
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error("Storage upload timed out. This is usually caused by Firebase Storage CORS blocks or network failures.")), 15000)
+    );
+
+    await Promise.race([
+      uploadString(storageRef, base64Image, 'data_url'),
+      timeoutPromise
+    ]);
+
     const downloadUrl = await getDownloadURL(storageRef);
     return downloadUrl;
   } catch (error) {
