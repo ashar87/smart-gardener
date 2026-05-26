@@ -1,4 +1,4 @@
-package com.plantpatrol.app;
+package com.plantpatrol26.app;
 
 import com.getcapacitor.BridgeActivity;
 

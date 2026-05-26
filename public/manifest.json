@@ -1,6 +1,6 @@
 {
-  "short_name": "Gardener",
-  "name": "Smart Gardener AI",
+  "short_name": "PlantPatrol",
+  "name": "PlantPatrol AI",
   "icons": [
     {
       "src": "icon.png",
@@ -11,7 +11,7 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#15803D",
+  "theme_color": "#5A5A40",
   "background_color": "#FDFBF7",
   "orientation": "portrait",
   "description": "Your personal AI assistant for keeping your plants healthy and thriving."
