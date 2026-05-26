@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, ChangeEvent, MouseEvent } from 'react';
+import { useState, useEffect, useRef, ChangeEvent, MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Leaf, Calendar, Camera, Info, Check, Trash2, HeartPulse, Droplets, Sprout, Scissors, Bell, BellOff, History, Sparkles, ArrowLeftRight, Image as ImageIcon, ArrowLeft, LogOut, ImageOff } from 'lucide-react';
 import { Plant, IdentificationResult, CareEvent, GrowthMilestone } from './types';
@@ -162,6 +162,11 @@ function AppContent() {
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<IdentificationResult | null>(null);
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
+  const selectedPlantRef = useRef<Plant | null>(null);
+  useEffect(() => {
+    selectedPlantRef.current = selectedPlant;
+  }, [selectedPlant]);
+
   const [loadingMessage, setLoadingMessage] = useState('Identifying species...');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [preferredNotificationTime, setPreferredNotificationTime] = useState('09:00');
@@ -186,9 +191,10 @@ function AppContent() {
       setPlants(fetchedPlants);
       setIsInitialLoad(false);
       
-      // Update selected plant if it exists
-      if (selectedPlant) {
-        const updatedSelected = fetchedPlants.find(p => p.id === selectedPlant.id);
+      // Update selected plant if it exists using latest ref value
+      const currentSelected = selectedPlantRef.current;
+      if (currentSelected) {
+        const updatedSelected = fetchedPlants.find(p => p.id === currentSelected.id);
         if (updatedSelected) setSelectedPlant(updatedSelected);
       }
     });
@@ -519,7 +525,6 @@ function AppContent() {
         }
 
         setLoadingMessage('Analyzing growth journey...');
-        
         const analysis = await analyzeGrowth(base64, []);
         console.log("Growth analysis result:", analysis);
         
@@ -532,13 +537,24 @@ function AppContent() {
           id: milestoneId,
           image: url,
           timestamp: Date.now(),
-          analysis
+          analysis: {
+            status: analysis.status,
+            description: analysis.description,
+            growthDetected: analysis.growthDetected
+          }
         };
 
         const newGrowthLog = [milestone, ...(selectedPlant.growthLog || [])].slice(0, 10);
-        const updatedPlant = { ...selectedPlant, growthLog: newGrowthLog };
+        
+        // Extract and update the plant's overall health status from the latest growth assessment
+        const updatedPlant = { 
+          ...selectedPlant, 
+          growthLog: newGrowthLog,
+          healthStatus: analysis.health || selectedPlant.healthStatus
+        };
         
         await syncPlantToCloud(currentUser!.uid, updatedPlant);
+        setSelectedPlant(updatedPlant); // Guarantee immediate local UI updates
         triggerSuccessHaptic();
         setView('detail');
       } catch (error) {
@@ -1119,15 +1135,46 @@ function AppContent() {
               </div>
 
               <div className="space-y-8">
-                <div className="flex items-center gap-4 bg-white p-6 rounded-[32px] shadow-sm border border-moss/5">
-                  <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${selectedPlant.healthStatus.status === 'healthy' ? 'bg-green-100 text-green-700' : 'bg-terracotta/20 text-terracotta'}`}>
-                    <HeartPulse size={32} />
-                  </div>
-                  <div>
-                    <h3 className="font-serif font-bold text-stone text-lg capitalize">{selectedPlant.healthStatus.status} Condition</h3>
-                    <p className="text-xs text-stone/40 italic">Last checked {new Date(selectedPlant.addedAt).toLocaleDateString()}</p>
-                  </div>
-                </div>
+                {(() => {
+                  const lastCheckedDate = selectedPlant.growthLog && selectedPlant.growthLog.length > 0
+                    ? selectedPlant.growthLog[0].timestamp
+                    : selectedPlant.addedAt;
+                  
+                  const isHealthy = selectedPlant.healthStatus.status === 'healthy';
+                  
+                  return (
+                    <div className="bg-white p-6 rounded-[32px] shadow-sm border border-moss/5 space-y-4">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 ${isHealthy ? 'bg-green-100 text-green-700' : 'bg-terracotta/20 text-terracotta'}`}>
+                          <HeartPulse size={32} className={!isHealthy ? 'animate-pulse' : ''} />
+                        </div>
+                        <div>
+                          <h3 className="font-serif font-bold text-stone text-lg capitalize flex items-center gap-2">
+                            {selectedPlant.healthStatus.status} Condition
+                            {!isHealthy && <span className="w-2 h-2 rounded-full bg-terracotta animate-pulse" />}
+                          </h3>
+                          <p className="text-xs text-stone/40 italic">Last checked {new Date(lastCheckedDate).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      
+                      {selectedPlant.healthStatus.assessment && (
+                        <p className="text-xs text-stone/75 leading-relaxed border-t border-moss/5 pt-3">
+                          {selectedPlant.healthStatus.assessment}
+                        </p>
+                      )}
+                      
+                      {selectedPlant.healthStatus.issues && selectedPlant.healthStatus.issues.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {selectedPlant.healthStatus.issues.map(issue => (
+                            <span key={issue} className="text-[9px] bg-red-50 text-red-700 px-2.5 py-0.5 rounded-full border border-red-100 font-medium">
+                              ⚠️ {issue}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between px-2">

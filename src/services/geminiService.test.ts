@@ -50,6 +50,11 @@ const MOCK_GROWTH = {
   status: 'Improved',
   description: 'Two new leaves have emerged since the last photo.',
   growthDetected: true,
+  health: {
+    status: 'healthy',
+    assessment: 'Vibrant growth with no active issues.',
+    issues: [],
+  },
 };
 
 // ─── identifyPlant ────────────────────────────────────────────────────────────
@@ -215,7 +220,12 @@ describe('analyzeGrowth', () => {
 
   it('returns growthDetected false when no growth is visible', async () => {
     mockFetch.mockReturnValueOnce(
-      okResponse({ status: 'Stagnant', description: 'No change.', growthDetected: false })
+      okResponse({
+        status: 'Stagnant',
+        description: 'No change.',
+        growthDetected: false,
+        health: { status: 'healthy', assessment: 'No issues observed.', issues: [] }
+      })
     );
 
     const result = await analyzeGrowth(MOCK_BASE64, [MOCK_BASE64]);

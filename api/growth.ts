@@ -9,8 +9,17 @@ const GROWTH_SCHEMA = {
     status: { type: "STRING" },
     description: { type: "STRING" },
     growthDetected: { type: "BOOLEAN" },
+    health: {
+      type: "OBJECT",
+      properties: {
+        status: { type: "STRING", enum: ["healthy", "warning", "critical"] },
+        assessment: { type: "STRING" },
+        issues: { type: "ARRAY", items: { type: "STRING" } },
+      },
+      required: ["status", "assessment", "issues"],
+    },
   },
-  required: ["status", "description", "growthDetected"],
+  required: ["status", "description", "growthDetected", "health"],
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -36,9 +45,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [...parts, { text: "Analyze growth progress comparing the current photo with previous photos." }] }],
+        contents: [{ role: "user", parts: [...parts, { text: "Analyze growth progress comparing the current photo with previous photos, and also perform a detailed health assessment on the current photo (the latest one)." }] }],
         generationConfig: { responseMimeType: "application/json", responseSchema: GROWTH_SCHEMA },
-        systemInstruction: { parts: [{ text: "You are an expert botanist specialized in plant growth analysis." }] },
+        systemInstruction: { parts: [{ text: "You are an expert botanist specialized in plant growth and health analysis. Assess both the growth trajectory and the latest health condition. If you notice health issues, describe them in the health section." }] },
       }),
     });
 
