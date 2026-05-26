@@ -9,6 +9,8 @@ const Onboarding: React.FC = () => {
   const [loading, setLoading] = useState(false);
   
   const [mode, setMode] = useState<'landing' | 'login' | 'signup'>('landing');
+  const [landingConsentChecked, setLandingConsentChecked] = useState(false);
+  const [signupConsentChecked, setSignupConsentChecked] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -66,34 +68,48 @@ const Onboarding: React.FC = () => {
     <>
       <div className="w-full space-y-4">
         <button 
+          id="google-signin-btn"
           onClick={handleGoogleSignIn}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-3 bg-white text-stone border border-clay hover:bg-gray-50 font-medium py-3.5 px-6 rounded-2xl shadow-sm transition-all duration-200 disabled:opacity-50"
+          disabled={loading || !landingConsentChecked}
+          className="w-full flex items-center justify-center gap-3 bg-white text-stone border border-clay hover:bg-gray-50 font-medium py-3.5 px-6 rounded-2xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Chrome size={20} />
           {loading ? 'Signing in...' : 'Continue with Google'}
         </button>
         
         <button 
+          id="email-signup-btn"
           onClick={() => { setError(null); setMode('signup'); }}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-3 bg-moss text-white hover:bg-moss/90 font-medium py-3.5 px-6 rounded-2xl shadow-sm transition-all duration-200 disabled:opacity-50"
+          disabled={loading || !landingConsentChecked}
+          className="w-full flex items-center justify-center gap-3 bg-moss text-white hover:bg-moss/90 font-medium py-3.5 px-6 rounded-2xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Mail size={20} />
           Sign up with Email
         </button>
       </div>
+
+      <div className="w-full mt-6 flex items-start gap-3 bg-white/40 p-4 rounded-2xl border border-moss/5 text-left">
+        <input 
+          id="gdpr-consent-landing"
+          type="checkbox"
+          checked={landingConsentChecked}
+          onChange={e => setLandingConsentChecked(e.target.checked)}
+          className="mt-1 h-4.5 w-4.5 accent-moss rounded cursor-pointer shrink-0"
+        />
+        <label htmlFor="gdpr-consent-landing" className="text-xs text-stone/70 leading-relaxed cursor-pointer select-none">
+          I acknowledge having read the{' '}
+          <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="underline text-moss font-bold hover:text-moss/80">Privacy Policy</a>
+          {' '}and agree to the{' '}
+          <a href="/terms-of-service.html" target="_blank" rel="noopener noreferrer" className="underline text-moss font-bold hover:text-moss/80">Terms of Service</a>
+          {' '}for secure data storage on Firebase.
+        </label>
+      </div>
+
       <p className="mt-6 text-sm text-stone/70 text-center">
         Already have an account?{' '}
         <button onClick={() => { setError(null); setMode('login'); }} className="font-bold text-moss hover:underline">
           Log in
         </button>
-      </p>
-      <p className="text-xs text-stone/40 mt-10 text-center max-w-xs">
-        By continuing, you agree to our{' '}
-        <a href="/terms-of-service.html" target="_blank" rel="noopener noreferrer" className="underline text-moss/60 hover:text-moss">Terms of Service</a>
-        {' '}and{' '}
-        <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="underline text-moss/60 hover:text-moss">Privacy Policy</a>.
       </p>
     </>
   );
@@ -143,10 +159,29 @@ const Onboarding: React.FC = () => {
         />
       </div>
 
+      {mode === 'signup' && (
+        <div className="w-full mt-2 mb-2 flex items-start gap-3 bg-white/40 p-4 rounded-2xl border border-moss/5 text-left">
+          <input 
+            id="gdpr-consent-signup"
+            type="checkbox"
+            checked={signupConsentChecked}
+            onChange={e => setSignupConsentChecked(e.target.checked)}
+            className="mt-1 h-4.5 w-4.5 accent-moss rounded cursor-pointer shrink-0"
+          />
+          <label htmlFor="gdpr-consent-signup" className="text-xs text-stone/70 leading-relaxed cursor-pointer select-none">
+            I acknowledge having read the{' '}
+            <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="underline text-moss font-bold hover:text-moss/80">Privacy Policy</a>
+            {' '}and agree to the{' '}
+            <a href="/terms-of-service.html" target="_blank" rel="noopener noreferrer" className="underline text-moss font-bold hover:text-moss/80">Terms of Service</a>.
+          </label>
+        </div>
+      )}
+
       <button 
+        id="email-submit-btn"
         type="submit"
-        disabled={loading}
-        className="w-full flex items-center justify-center bg-moss text-white hover:bg-moss/90 font-bold py-4 rounded-2xl shadow-sm transition-all duration-200 disabled:opacity-50 mt-2"
+        disabled={loading || (mode === 'signup' && !signupConsentChecked)}
+        className="w-full flex items-center justify-center bg-moss text-white hover:bg-moss/90 font-bold py-4 rounded-2xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed mt-2"
       >
         {loading ? 'Please wait...' : mode === 'login' ? 'Log In' : 'Sign Up'}
       </button>

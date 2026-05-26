@@ -7,9 +7,10 @@ interface SettingsViewProps {
   onToggleNotifications: () => void;
   preferredTime: string;
   onTimeChange: (time: string) => void;
+  onDeleteAccount: () => void;
 }
 
-export default function SettingsView({ notificationsEnabled, onToggleNotifications, preferredTime, onTimeChange }: SettingsViewProps) {
+export default function SettingsView({ notificationsEnabled, onToggleNotifications, preferredTime, onTimeChange, onDeleteAccount }: SettingsViewProps) {
   const { currentUser, logout } = useAuth();
 
   return (
@@ -112,10 +113,20 @@ export default function SettingsView({ notificationsEnabled, onToggleNotificatio
       <button
         id="sign-out-btn"
         onClick={logout}
-        className="w-full flex items-center justify-center gap-3 bg-white border border-red-100 text-red-500 font-bold py-4 rounded-2xl shadow-sm hover:bg-red-50 transition-colors"
+        className="w-full flex items-center justify-center gap-3 bg-white border border-red-100 text-red-500 font-bold py-4 rounded-2xl shadow-sm hover:bg-red-50 transition-colors mb-3"
       >
         <LogOut size={18} />
         Sign Out
+      </button>
+
+      {/* Delete Account (GDPR Compliance) */}
+      <button
+        id="delete-account-btn"
+        onClick={onDeleteAccount}
+        className="w-full flex items-center justify-center gap-3 bg-red-50/50 border border-red-200 text-red-600 font-bold py-4 rounded-2xl shadow-sm hover:bg-red-100/50 transition-colors"
+      >
+        <Shield size={18} className="text-red-500" />
+        Delete My Account (GDPR)
       </button>
     </motion.div>
   );

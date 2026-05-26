@@ -11,6 +11,7 @@ import { identifyPlant, analyzeGrowth, reanalyzeWithCorrectName } from './servic
 import { requestNotificationPermission, scheduleWateringNotification, cancelWateringNotification, scheduleSeasonalNotification, cancelSeasonalNotification } from './services/notificationService';
 import { uploadPlantImage, syncPlantToCloud, deletePlantFromCloud, subscribeToPlants } from './services/cloudSync';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { auth } from './services/firebase';
 import Onboarding from './components/Onboarding';
 import BottomNav, { Tab } from './components/BottomNav';
 import CalendarView from './components/CalendarView';
@@ -421,6 +422,50 @@ function AppContent() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (!currentUser) return;
+    
+    const doubleConfirm = confirm(
+      "⚠️ WARNING: This will permanently delete your account and erase all of your plant data, care schedules, and progress photos from Firebase, meeting your GDPR 'Right to Erasure'.\n\nAre you sure you want to proceed?"
+    );
+    
+    if (!doubleConfirm) return;
+    
+    try {
+      setView('analyzing');
+      setLoadingMessage('Erasing account and data...');
+      
+      // 1. Delete all user plant documents from Firestore
+      const deletePromises = plants.map(p => deletePlantFromCloud(currentUser.uid, p.id));
+      await Promise.all(deletePromises);
+      
+      // 2. Delete the user's Firebase Auth profile
+      const user = auth?.currentUser;
+      if (user) {
+        await user.delete();
+      }
+      
+      triggerWarningHaptic();
+      alert("Your account and all associated personal data have been completely and permanently erased under GDPR rules.");
+      
+      // 3. Reset local states
+      setPlants([]);
+      setSelectedPlant(null);
+      setView('dashboard');
+    } catch (err: any) {
+      console.error("Account deletion failed:", err);
+      
+      if (err.code === 'auth/requires-recent-login') {
+        alert(
+          "🔒 SECURITY ACTION REQUIRED:\n\nFor your security under GDPR data protection policies, deleting your account requires you to have logged in recently.\n\nPlease sign out, log back in immediately, and try again!"
+        );
+      } else {
+        alert(`Failed to delete account: ${err.message || String(err)}`);
+      }
+      setView('dashboard');
+    }
+  };
+
   const addCareEvent = async (plantId: string, type: CareEvent['type'], note?: string) => {
     if (!currentUser) return;
     const plant = plants.find(p => p.id === plantId);
@@ -796,6 +841,7 @@ function AppContent() {
               onToggleNotifications={handleNotificationToggle}
               preferredTime={preferredNotificationTime}
               onTimeChange={setPreferredNotificationTime}
+              onDeleteAccount={handleDeleteAccount}
             />
           )}
 

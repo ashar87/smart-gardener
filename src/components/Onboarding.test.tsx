@@ -3,6 +3,7 @@
  *
  * Verifies that the landing screen renders correctly when no user is signed in,
  * and that the basic navigation flows (to login, to signup, back) work.
+ * Also verifies strict GDPR compliance configurations.
  *
  * AuthContext is mocked to simulate a logged-out state.
  * firebase.ts is mocked so no real Firebase SDK is initialised.
@@ -76,9 +77,71 @@ describe('Onboarding — landing screen (smoke tests)', () => {
     expect(screen.getByText('Log in')).toBeInTheDocument();
   });
 
-  it('renders the terms of service notice', () => {
+  it('renders the GDPR consent checkbox notice', () => {
     render(<Onboarding />);
+    expect(screen.getByText(/I acknowledge having read the/i)).toBeInTheDocument();
     expect(screen.getByText(/Terms of Service/i)).toBeInTheDocument();
+    expect(screen.getByText(/Privacy Policy/i)).toBeInTheDocument();
+  });
+});
+
+// ─── GDPR Compliance Checks ───────────────────────────────────────────────────
+
+describe('Onboarding — GDPR Consent compliance', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('disables Google and Email Sign-Up buttons by default', () => {
+    render(<Onboarding />);
+    const googleBtn = screen.getByText('Continue with Google').closest('button');
+    const emailBtn = screen.getByText('Sign up with Email').closest('button');
+    
+    expect(googleBtn).toBeDisabled();
+    expect(emailBtn).toBeDisabled();
+  });
+
+  it('enables landing buttons when GDPR checkbox is checked', () => {
+    render(<Onboarding />);
+    const checkbox = screen.getByLabelText(/I acknowledge having read the/i);
+    const googleBtn = screen.getByText('Continue with Google').closest('button');
+    const emailBtn = screen.getByText('Sign up with Email').closest('button');
+    
+    fireEvent.click(checkbox);
+    expect(googleBtn).not.toBeDisabled();
+    expect(emailBtn).not.toBeDisabled();
+  });
+
+  it('disables email sign-up form submit button by default', () => {
+    render(<Onboarding />);
+    // Navigate to email signup
+    const landingCheckbox = screen.getByLabelText(/I acknowledge having read the/i);
+    fireEvent.click(landingCheckbox);
+    fireEvent.click(screen.getByText('Sign up with Email'));
+    
+    const submitBtn = screen.getByText('Sign Up').closest('button');
+    expect(submitBtn).toBeDisabled();
+  });
+
+  it('enables email sign-up form submit button when consent checkbox is checked', () => {
+    render(<Onboarding />);
+    // Navigate to email signup
+    const landingCheckbox = screen.getByLabelText(/I acknowledge having read the/i);
+    fireEvent.click(landingCheckbox);
+    fireEvent.click(screen.getByText('Sign up with Email'));
+    
+    const signupCheckbox = screen.getByLabelText(/agree to the Terms of Service/i);
+    const submitBtn = screen.getByText('Sign Up').closest('button');
+    
+    fireEvent.click(signupCheckbox);
+    expect(submitBtn).not.toBeDisabled();
+  });
+
+  it('does NOT require consent checkbox for Log In mode', () => {
+    render(<Onboarding />);
+    fireEvent.click(screen.getByText('Log in'));
+    
+    const submitBtn = screen.getByText('Log In').closest('button');
+    // Standard login doesn't require GDPR checkbox re-check
+    expect(submitBtn).not.toBeDisabled();
   });
 });
 
@@ -89,12 +152,14 @@ describe('Onboarding — navigation to sign up form', () => {
 
   it('shows the "Create Account" heading after clicking "Sign up with Email"', () => {
     render(<Onboarding />);
+    fireEvent.click(screen.getByLabelText(/I acknowledge having read the/i));
     fireEvent.click(screen.getByText('Sign up with Email'));
     expect(screen.getByText('Create Account')).toBeInTheDocument();
   });
 
   it('shows email and password inputs after navigating to sign up', () => {
     render(<Onboarding />);
+    fireEvent.click(screen.getByLabelText(/I acknowledge having read the/i));
     fireEvent.click(screen.getByText('Sign up with Email'));
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('••••••••')).toBeInTheDocument();
@@ -102,6 +167,7 @@ describe('Onboarding — navigation to sign up form', () => {
 
   it('shows a "Back" button on the sign up form', () => {
     render(<Onboarding />);
+    fireEvent.click(screen.getByLabelText(/I acknowledge having read the/i));
     fireEvent.click(screen.getByText('Sign up with Email'));
     expect(screen.getByText(/Back/i)).toBeInTheDocument();
   });
@@ -133,6 +199,7 @@ describe('Onboarding — back navigation', () => {
 
   it('returns to the landing screen when "Back" is clicked from sign up', () => {
     render(<Onboarding />);
+    fireEvent.click(screen.getByLabelText(/I acknowledge having read the/i));
     fireEvent.click(screen.getByText('Sign up with Email'));
     fireEvent.click(screen.getByText(/Back/i));
     expect(screen.getByText('PlantPatrol')).toBeInTheDocument();
@@ -147,6 +214,7 @@ describe('Onboarding — Firebase not configured', () => {
 
   it('shows an error message when Google sign-in is attempted without Firebase config', () => {
     render(<Onboarding />);
+    fireEvent.click(screen.getByLabelText(/I acknowledge having read the/i));
     fireEvent.click(screen.getByText('Continue with Google'));
     expect(
       screen.getByText(/Firebase is not configured/i)
@@ -161,10 +229,14 @@ describe('Onboarding — form validation', () => {
 
   it('shows a Firebase error when submitting without config (auth is null)', async () => {
     render(<Onboarding />);
+    fireEvent.click(screen.getByLabelText(/I acknowledge having read the/i));
     fireEvent.click(screen.getByText('Sign up with Email'));
     
     // Find the form and submit it
     const emailInput = screen.getByPlaceholderText('you@example.com');
+    // Active check on signup consent checkbox
+    fireEvent.click(screen.getByLabelText(/agree to the Terms of Service/i));
+    
     const form = emailInput.closest('form')!;
     fireEvent.submit(form);
     
