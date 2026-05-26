@@ -23,9 +23,9 @@ Copy `.env.example` to `.env` and populate all `VITE_FIREBASE_*` vars plus `VITE
 
 ## Project Overview
 
-Smart Gardener is an AI-powered plant identification and care management app. Users photograph a plant, Gemini identifies it and generates a care schedule, and the app tracks watering/health history with push notifications. Built as a mobile-first PWA with Capacitor for native iOS/Android packaging.
+PlantPatrol is an AI-powered plant identification and care management app. Users photograph a plant, Gemini identifies it and generates a care schedule, and the app tracks watering/health history with push notifications. Built as a mobile-first PWA with Capacitor for native iOS/Android packaging.
 
-**App ID:** `com.smartgardener.app` | **Tech stack:** React 19 + Vite 6 + Firebase 12 + Tailwind 4 + Gemini AI
+**App ID:** `com.plantpatrol26.app` | **Tech stack:** React 19 + Vite 6 + Firebase 12 + Tailwind 4 + Gemini AI
 
 ---
 

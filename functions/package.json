@@ -1,6 +1,6 @@
 {
   "name": "functions",
-  "description": "Smart Gardener Firebase Cloud Functions — Gemini API proxy",
+  "description": "PlantPatrol Firebase Cloud Functions — Gemini API proxy",
   "scripts": {
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --only functions",

@@ -1,5 +1,5 @@
 /**
- * Smart Gardener — Firebase Cloud Functions
+ * PlantPatrol — Firebase Cloud Functions
  * Proxies Gemini AI calls so the API key stays server-side.
  */
 
