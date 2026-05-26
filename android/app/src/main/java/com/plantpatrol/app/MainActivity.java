@@ -1,4 +1,4 @@
-package com.smartgardener.app;
+package com.plantpatrol.app;
 
 import com.getcapacitor.BridgeActivity;
 

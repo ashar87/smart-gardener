@@ -18,3 +18,24 @@ View your app in AI Studio: https://ai.studio/apps/e8d2081a-ddc3-477e-8a92-a9c12
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Deployment & Android Build
+
+### 1. Generate Release Key (First time only)
+Run this from the project root to generate a keystore in the Android folder:
+```bash
+keytool -genkey -v -keystore android/app/release.keystore -alias plant-patrol -keyalg RSA -keysize 2048 -validity 10000
+```
+
+### 2. Configure Credentials
+Update `android/gradle.properties` with your passwords:
+- `RELEASE_STORE_PASSWORD`
+- `RELEASE_KEY_PASSWORD`
+
+### 3. Build App Bundle (.aab)
+```bash
+npm run build
+npx cap sync android
+cd android && ./gradlew bundleRelease
+```
+The bundle will be at `android/app/build/outputs/bundle/release/app-release.aab`.

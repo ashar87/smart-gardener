@@ -1,5 +1,5 @@
 {
-  "appId": "com.smartgardener.app",
+  "appId": "com.plantpatrol.app",
   "appName": "PlantPatrol",
   "webDir": "dist",
   "bundledWebRuntime": false,
