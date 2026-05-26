@@ -49,9 +49,9 @@ import Onboarding from './Onboarding';
 describe('Onboarding — landing screen (smoke tests)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('renders the app name "Smart Gardener"', () => {
+  it('renders the app name "PlantPatrol"', () => {
     render(<Onboarding />);
-    expect(screen.getByText('Smart Gardener')).toBeInTheDocument();
+    expect(screen.getByText('PlantPatrol')).toBeInTheDocument();
   });
 
   it('renders the app tagline', () => {
@@ -135,7 +135,7 @@ describe('Onboarding — back navigation', () => {
     render(<Onboarding />);
     fireEvent.click(screen.getByText('Sign up with Email'));
     fireEvent.click(screen.getByText(/Back/i));
-    expect(screen.getByText('Smart Gardener')).toBeInTheDocument();
+    expect(screen.getByText('PlantPatrol')).toBeInTheDocument();
     expect(screen.getByText('Continue with Google')).toBeInTheDocument();
   });
 });

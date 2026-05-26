@@ -177,7 +177,7 @@ const Onboarding: React.FC = () => {
               <Sprout size={48} className="text-moss" />
             </div>
             <h1 className="text-4xl font-serif font-bold text-moss mb-3 text-center">
-              Smart Gardener
+              PlantPatrol
             </h1>
             <p className="text-lg text-stone/70 text-center mb-12">
               Your personal AI assistant for keeping your plants healthy and thriving.

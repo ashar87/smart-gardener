@@ -4,10 +4,24 @@ import { db, storage } from './firebase';
 import { Plant } from '../types';
 
 export const uploadPlantImage = async (userId: string, plantId: string, base64Image: string, isMilestone = false, milestoneId?: string): Promise<string> => {
-  // Since Firebase Storage isn't available on the free plan in some regions,
-  // we bypass it and return the compressed base64 string directly.
-  // This will store the image text directly inside the Firestore database document!
-  return base64Image;
+  if (!storage) {
+    console.warn("Firebase Storage is not initialized. Storing base64 image in Firestore.");
+    return base64Image;
+  }
+  
+  try {
+    const path = isMilestone 
+      ? `users/${userId}/plants/${plantId}/milestones/${milestoneId || Date.now().toString()}.jpg`
+      : `users/${userId}/plants/${plantId}/main.jpg`;
+      
+    const storageRef = ref(storage, path);
+    await uploadString(storageRef, base64Image, 'data_url');
+    const downloadUrl = await getDownloadURL(storageRef);
+    return downloadUrl;
+  } catch (error) {
+    console.error("Error uploading image to Firebase Storage:", error);
+    throw error;
+  }
 };
 
 export const syncPlantToCloud = async (userId: string, plant: Plant): Promise<void> => {
@@ -32,8 +46,14 @@ export const deletePlantFromCloud = async (userId: string, plantId: string): Pro
   const plantRef = doc(db, `users/${userId}/plants/${plantId}`);
   await deleteDoc(plantRef);
   
-  // Note: For a robust app, we'd also trigger a Cloud Function to delete all images in the Storage folder for this plant,
-  // or delete them manually here. For prototype simplicity, we delete the document.
+  if (storage) {
+    try {
+      const storageRef = ref(storage, `users/${userId}/plants/${plantId}/main.jpg`);
+      await deleteObject(storageRef);
+    } catch (e) {
+      console.warn("Could not delete plant image from storage:", e);
+    }
+  }
 };
 
 export const subscribeToPlants = (userId: string, callback: (plants: Plant[]) => void) => {

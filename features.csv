@@ -1,7 +1,6 @@
 name,reach,impact,confidence,effort
 Native Push Notifications,8000,massive,high,m
 Weather API Integration,10000,massive,medium,xl
-Cloud Sync & Backup,10000,high,high,l
 Plant Catalog & Manual Entry,7000,medium,high,m
 Multi-plant Quick Actions,4000,medium,high,s
 Watering Calendar View,8000,high,high,m

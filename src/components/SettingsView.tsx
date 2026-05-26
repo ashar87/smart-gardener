@@ -91,7 +91,7 @@ export default function SettingsView({ notificationsEnabled, onToggleNotificatio
             <Leaf size={18} />
           </div>
           <div>
-            <div className="text-sm font-bold text-stone">Smart Gardener</div>
+            <div className="text-sm font-bold text-stone">PlantPatrol</div>
             <div className="text-[11px] text-stone/50">Version 1.0 · Powered by Gemini AI</div>
           </div>
         </div>

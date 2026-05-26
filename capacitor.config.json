@@ -1,6 +1,6 @@
 {
   "appId": "com.smartgardener.app",
-  "appName": "SmartGardener",
+  "appName": "PlantPatrol",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "plugins": {
@@ -8,13 +8,13 @@
       "launchShowDuration": 2000,
       "launchAutoHide": true,
       "launchFadeOutDuration": 500,
-      "backgroundColor": "#15803D",
+      "backgroundColor": "#F5F5F0",
       "androidSplashResourceName": "splash",
       "androidScaleType": "CENTER_CROP",
       "showSpinner": true,
       "androidSpinnerStyle": "large",
       "iosSpinnerStyle": "small",
-      "spinnerColor": "#FFFFFF",
+      "spinnerColor": "#5A5A40",
       "splashFullScreen": true,
       "splashImmersive": true,
       "layoutName": "launch_screen",
