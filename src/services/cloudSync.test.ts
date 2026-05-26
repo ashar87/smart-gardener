@@ -86,37 +86,14 @@ function makePlant(overrides: Partial<Plant> = {}): Plant {
 // ─── uploadPlantImage ─────────────────────────────────────────────────────────
 
 describe('uploadPlantImage', () => {
-  beforeEach(() => {
-    Object.values(storageMocks()).forEach(m => m.mockReset());
-  });
-
-  it('uploads the base64 image data URL to Firebase Storage and returns its download URL', async () => {
+  it('returns the base64 string as-is (Storage bypass)', async () => {
     const b64 = 'data:image/jpeg;base64,abc123';
-    const mockUrl = 'https://firebasestorage.googleapis.com/v0/b/mock/o/users%2Fuser-123%2Fplants%2Fplant-1%2Fmain.jpg';
-    
-    storageMocks().uploadString.mockResolvedValueOnce({} as any);
-    storageMocks().getDownloadURL.mockResolvedValueOnce(mockUrl);
-
-    const result = await uploadPlantImage(USER_ID, 'plant-1', b64);
-    
-    expect(storageMocks().ref).toHaveBeenCalledWith(expect.anything(), `users/${USER_ID}/plants/plant-1/main.jpg`);
-    expect(storageMocks().uploadString).toHaveBeenCalledWith(expect.anything(), b64, 'data_url');
-    expect(storageMocks().getDownloadURL).toHaveBeenCalledTimes(1);
-    expect(result).toBe(mockUrl);
+    expect(await uploadPlantImage(USER_ID, 'plant-1', b64)).toBe(b64);
   });
 
-  it('works for milestone images with correct path schema', async () => {
+  it('works for milestone images with same passthrough', async () => {
     const b64 = 'data:image/jpeg;base64,milestone';
-    const mockUrl = 'https://firebasestorage.googleapis.com/v0/b/mock/o/users%2Fuser-123%2Fplants%2Fplant-1%2Fmilestones%2Fms-1.jpg';
-    
-    storageMocks().uploadString.mockResolvedValueOnce({} as any);
-    storageMocks().getDownloadURL.mockResolvedValueOnce(mockUrl);
-
-    const result = await uploadPlantImage(USER_ID, 'plant-1', b64, true, 'ms-1');
-    
-    expect(storageMocks().ref).toHaveBeenCalledWith(expect.anything(), `users/${USER_ID}/plants/plant-1/milestones/ms-1.jpg`);
-    expect(storageMocks().uploadString).toHaveBeenCalledWith(expect.anything(), b64, 'data_url');
-    expect(result).toBe(mockUrl);
+    expect(await uploadPlantImage(USER_ID, 'plant-1', b64, true, 'ms-1')).toBe(b64);
   });
 });
 
@@ -175,39 +152,24 @@ describe('syncPlantToCloud', () => {
 describe('deletePlantFromCloud', () => {
   beforeEach(() => {
     Object.values(mocks()).forEach(m => m.mockReset());
-    Object.values(storageMocks()).forEach(m => m.mockReset());
   });
 
-  it('calls deleteDoc with the correct path and deletes plant image from storage', async () => {
+  it('calls deleteDoc with the correct path', async () => {
     mocks().deleteDoc.mockResolvedValueOnce(undefined);
-    storageMocks().deleteObject.mockResolvedValueOnce(undefined);
-
     await deletePlantFromCloud(USER_ID, 'plant-abc');
 
     expect(mocks().doc).toHaveBeenCalledWith(expect.anything(), `users/${USER_ID}/plants/plant-abc`);
     expect(mocks().deleteDoc).toHaveBeenCalledTimes(1);
-    
-    expect(storageMocks().ref).toHaveBeenCalledWith(expect.anything(), `users/${USER_ID}/plants/plant-abc/main.jpg`);
-    expect(storageMocks().deleteObject).toHaveBeenCalledTimes(1);
   });
 
   it('resolves without error on success', async () => {
     mocks().deleteDoc.mockResolvedValueOnce(undefined);
-    storageMocks().deleteObject.mockResolvedValueOnce(undefined);
     await expect(deletePlantFromCloud(USER_ID, 'plant-abc')).resolves.toBeUndefined();
   });
 
   it('throws when deleteDoc rejects', async () => {
-    mocks().deleteDoc.mockRejectedValueOnce(new Error('Permission denied'));
-    await expect(deletePlantFromCloud(USER_ID, 'plant-abc')).rejects.toThrow('Permission denied');
-  });
-
-  it('does not throw when storage deletion fails (graceful error handling)', async () => {
-    mocks().deleteDoc.mockResolvedValueOnce(undefined);
-    storageMocks().deleteObject.mockRejectedValueOnce(new Error('Storage delete failed'));
-    
-    await expect(deletePlantFromCloud(USER_ID, 'plant-abc')).resolves.toBeUndefined();
-    expect(storageMocks().deleteObject).toHaveBeenCalledTimes(1);
+    mocks().deleteDoc.mockRejectedValueOnce(new Error('Delete failed'));
+    await expect(deletePlantFromCloud(USER_ID, 'plant-abc')).rejects.toThrow('Delete failed');
   });
 });
 

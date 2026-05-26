@@ -4,34 +4,10 @@ import { db, storage } from './firebase';
 import { Plant } from '../types';
 
 export const uploadPlantImage = async (userId: string, plantId: string, base64Image: string, isMilestone = false, milestoneId?: string): Promise<string> => {
-  if (!storage) {
-    console.warn("Firebase Storage is not initialized. Storing base64 image in Firestore.");
-    return base64Image;
-  }
-  
-  try {
-    const path = isMilestone 
-      ? `users/${userId}/plants/${plantId}/milestones/${milestoneId || Date.now().toString()}.jpg`
-      : `users/${userId}/plants/${plantId}/main.jpg`;
-      
-    const storageRef = ref(storage, path);
-    
-    // Timeout wrapper to prevent hanging on CORS or network/service worker failures
-    const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error("Storage upload timed out. This is usually caused by Firebase Storage CORS blocks or network failures.")), 15000)
-    );
-
-    await Promise.race([
-      uploadString(storageRef, base64Image, 'data_url'),
-      timeoutPromise
-    ]);
-
-    const downloadUrl = await getDownloadURL(storageRef);
-    return downloadUrl;
-  } catch (error) {
-    console.error("Error uploading image to Firebase Storage:", error);
-    throw error;
-  }
+  // Bypassing Firebase Storage completely to ensure the application remains 100% free 
+  // without requiring credit cards, billing profiles, or Blaze plan upgrades.
+  // Image compression is handled at the client level, fitting comfortably under Firestore's 1 MiB limit.
+  return base64Image;
 };
 
 export const syncPlantToCloud = async (userId: string, plant: Plant): Promise<void> => {
@@ -55,15 +31,6 @@ export const deletePlantFromCloud = async (userId: string, plantId: string): Pro
   
   const plantRef = doc(db, `users/${userId}/plants/${plantId}`);
   await deleteDoc(plantRef);
-  
-  if (storage) {
-    try {
-      const storageRef = ref(storage, `users/${userId}/plants/${plantId}/main.jpg`);
-      await deleteObject(storageRef);
-    } catch (e) {
-      console.warn("Could not delete plant image from storage:", e);
-    }
-  }
 };
 
 export const subscribeToPlants = (userId: string, callback: (plants: Plant[]) => void) => {
