@@ -140,7 +140,11 @@ const PlantCard = ({ plant, onClick, onDelete }: { plant: Plant; onClick: () => 
         <p className="text-sm text-stone/60 italic font-serif">{plant.species}</p>
         <div className="mt-3 pt-3 border-t border-moss/5 flex items-center gap-2 text-xs text-stone/70">
           <Calendar size={14} className="text-stone/30" />
-          <span>Next water: {nextWateringDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+          {plant.careSchedule.watering.nextWatered < Date.now() ? (
+            <span className="text-terracotta font-bold">Needs water today</span>
+          ) : (
+            <span>Next water: {nextWateringDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+          )}
         </div>
       </div>
       <button 
@@ -169,7 +173,7 @@ function AppContent() {
   }, [selectedPlant]);
 
   const [loadingMessage, setLoadingMessage] = useState('Identifying species...');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [preferredNotificationTime, setPreferredNotificationTime] = useState('09:00');
   const [compareMode, setCompareMode] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -205,7 +209,11 @@ function AppContent() {
   // Load notif settings
   useEffect(() => {
     const savedNotifs = localStorage.getItem('smart-gardener-notifications');
-    if (savedNotifs === 'true') setNotificationsEnabled(true);
+    if (savedNotifs !== null) {
+      setNotificationsEnabled(savedNotifs === 'true');
+    } else {
+      setNotificationsEnabled(true);
+    }
     
     const savedTime = localStorage.getItem('smart-gardener-notif-time');
     if (savedTime) setPreferredNotificationTime(savedTime);
@@ -475,7 +483,7 @@ function AppContent() {
       id: Math.random().toString(36).substring(7),
       type,
       timestamp: Date.now(),
-      note
+      ...(note && { note })
     };
     
     let newCareSchedule = { ...plant.careSchedule };
@@ -539,6 +547,15 @@ function AppContent() {
     const updatedPlant = { ...selectedPlant, reminders: updatedReminders as any };
     try {
       await syncPlantToCloud(currentUser.uid, updatedPlant);
+      
+      // If the user turned a reminder ON, but overall notifications are OFF, activate them
+      if (updatedReminders[type] && !notificationsEnabled) {
+        const granted = await requestNotificationPermission();
+        setNotificationsEnabled(granted);
+        if (!granted) {
+          alert("Notification permissions are required for reminders. Please enable them in your device settings.");
+        }
+      }
     } catch (e) {
       console.error(e);
     }
@@ -1330,7 +1347,13 @@ function AppContent() {
                             </button>
                           </div>
                           <div className="text-xs text-stone/50">{selectedPlant.careSchedule.watering.frequency}</div>
-                          <div className="text-[10px] mt-1 text-moss font-bold">Next: {new Date(selectedPlant.careSchedule.watering.nextWatered).toLocaleDateString()}</div>
+                          <div className="text-[10px] mt-1 text-moss font-bold">
+                            {selectedPlant.careSchedule.watering.nextWatered < Date.now() ? (
+                              <span className="text-terracotta font-bold">Next: Needs water today</span>
+                            ) : (
+                              <span>Next: {new Date(selectedPlant.careSchedule.watering.nextWatered).toLocaleDateString()}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1359,7 +1382,13 @@ function AppContent() {
                               <>
                                 <div className="text-xs text-stone/50">{selectedPlant.careSchedule.fertilizer.instructions}</div>
                                 {selectedPlant.careSchedule.fertilizer.nextScheduled && (
-                                  <div className="text-[10px] mt-1 text-moss font-bold">Next: {new Date(selectedPlant.careSchedule.fertilizer.nextScheduled).toLocaleDateString()}</div>
+                                  <div className="text-[10px] mt-1 text-moss font-bold">
+                                    {selectedPlant.careSchedule.fertilizer.nextScheduled < Date.now() ? (
+                                      <span className="text-terracotta font-bold">Next: Needs fertilizer today</span>
+                                    ) : (
+                                      <span>Next: {new Date(selectedPlant.careSchedule.fertilizer.nextScheduled).toLocaleDateString()}</span>
+                                    )}
+                                  </div>
                                 )}
                               </>
                             )}
@@ -1382,7 +1411,13 @@ function AppContent() {
                               <>
                                 <div className="text-xs text-stone/50">{selectedPlant.careSchedule.pruning.instructions}</div>
                                 {selectedPlant.careSchedule.pruning.nextScheduled && (
-                                  <div className="text-[10px] mt-1 text-moss font-bold">Next: {new Date(selectedPlant.careSchedule.pruning.nextScheduled).toLocaleDateString()}</div>
+                                  <div className="text-[10px] mt-1 text-moss font-bold">
+                                    {selectedPlant.careSchedule.pruning.nextScheduled < Date.now() ? (
+                                      <span className="text-terracotta font-bold">Next: Needs pruning today</span>
+                                    ) : (
+                                      <span>Next: {new Date(selectedPlant.careSchedule.pruning.nextScheduled).toLocaleDateString()}</span>
+                                    )}
+                                  </div>
                                 )}
                               </>
                             )}

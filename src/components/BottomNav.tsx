@@ -18,7 +18,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     <nav
       id="bottom-nav"
       aria-label="Main navigation"
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-moss/10"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-moss/10 pb-safe"
     >
       <div className="max-w-md mx-auto flex items-center justify-around">
         {tabs.map(({ id, label, Icon }) => {
