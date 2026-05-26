@@ -90,13 +90,17 @@ describe('Onboarding — landing screen (smoke tests)', () => {
 describe('Onboarding — GDPR Consent compliance', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('disables Google and Email Sign-Up buttons by default', () => {
+  it('enables Google and Email Sign-Up buttons by default, but triggers validation error if clicked without consent', () => {
     render(<Onboarding />);
-    const googleBtn = screen.getByText('Continue with Google').closest('button');
-    const emailBtn = screen.getByText('Sign up with Email').closest('button');
+    const googleBtn = screen.getByText('Continue with Google').closest('button')!;
+    const emailBtn = screen.getByText('Sign up with Email').closest('button')!;
     
-    expect(googleBtn).toBeDisabled();
-    expect(emailBtn).toBeDisabled();
+    expect(googleBtn).not.toBeDisabled();
+    expect(emailBtn).not.toBeDisabled();
+
+    // Click without consent displays validation error
+    fireEvent.click(googleBtn);
+    expect(screen.getByText(/Please acknowledge the Privacy Policy/i)).toBeInTheDocument();
   });
 
   it('enables landing buttons when GDPR checkbox is checked', () => {
@@ -110,15 +114,22 @@ describe('Onboarding — GDPR Consent compliance', () => {
     expect(emailBtn).not.toBeDisabled();
   });
 
-  it('disables email sign-up form submit button by default', () => {
+  it('enables email sign-up form submit button by default, but triggers validation error if clicked without consent', () => {
     render(<Onboarding />);
     // Navigate to email signup
-    const landingCheckbox = screen.getByLabelText(/I acknowledge having read the/i);
-    fireEvent.click(landingCheckbox);
     fireEvent.click(screen.getByText('Sign up with Email'));
     
-    const submitBtn = screen.getByText('Sign Up').closest('button');
-    expect(submitBtn).toBeDisabled();
+    const submitBtn = screen.getByText('Sign Up').closest('button')!;
+    expect(submitBtn).not.toBeDisabled();
+
+    // Click without consent displays validation error
+    const emailInput = screen.getByPlaceholderText('you@example.com');
+    const passwordInput = screen.getByPlaceholderText('••••••••');
+    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+    
+    fireEvent.click(submitBtn);
+    expect(screen.getByText(/Please acknowledge the Privacy Policy/i)).toBeInTheDocument();
   });
 
   it('enables email sign-up form submit button when consent checkbox is checked', () => {

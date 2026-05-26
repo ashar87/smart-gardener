@@ -11,6 +11,8 @@ const Onboarding: React.FC = () => {
   const [mode, setMode] = useState<'landing' | 'login' | 'signup'>('landing');
   const [landingConsentChecked, setLandingConsentChecked] = useState(false);
   const [signupConsentChecked, setSignupConsentChecked] = useState(false);
+  const [shakeLandingCheckbox, setShakeLandingCheckbox] = useState(false);
+  const [shakeSignupCheckbox, setShakeSignupCheckbox] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -23,6 +25,12 @@ const Onboarding: React.FC = () => {
   };
 
   const handleGoogleSignIn = async () => {
+    if (!landingConsentChecked) {
+      setError("Please acknowledge the Privacy Policy and Terms of Service to continue.");
+      setShakeLandingCheckbox(true);
+      setTimeout(() => setShakeLandingCheckbox(false), 500);
+      return;
+    }
     if (!checkFirebase()) return;
     try {
       setError(null);
@@ -37,6 +45,12 @@ const Onboarding: React.FC = () => {
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (mode === 'signup' && !signupConsentChecked) {
+      setError("Please acknowledge the Privacy Policy and Terms of Service to continue.");
+      setShakeSignupCheckbox(true);
+      setTimeout(() => setShakeSignupCheckbox(false), 500);
+      return;
+    }
     if (!checkFirebase()) return;
     if (!email || !password) {
       setError("Please fill in all fields.");
@@ -70,8 +84,8 @@ const Onboarding: React.FC = () => {
         <button 
           id="google-signin-btn"
           onClick={handleGoogleSignIn}
-          disabled={loading || !landingConsentChecked}
-          className="w-full flex items-center justify-center gap-3 bg-white text-stone border border-clay hover:bg-gray-50 font-medium py-3.5 px-6 rounded-2xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-3 bg-white text-stone border border-clay hover:bg-gray-50 font-medium py-3.5 px-6 rounded-2xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           <Chrome size={20} />
           {loading ? 'Signing in...' : 'Continue with Google'}
@@ -80,20 +94,20 @@ const Onboarding: React.FC = () => {
         <button 
           id="email-signup-btn"
           onClick={() => { setError(null); setMode('signup'); }}
-          disabled={loading || !landingConsentChecked}
-          className="w-full flex items-center justify-center gap-3 bg-moss text-white hover:bg-moss/90 font-medium py-3.5 px-6 rounded-2xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-3 bg-moss text-white hover:bg-moss/90 font-medium py-3.5 px-6 rounded-2xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           <Mail size={20} />
           Sign up with Email
         </button>
       </div>
 
-      <div className="w-full mt-6 flex items-start gap-3 bg-white/40 p-4 rounded-2xl border border-moss/5 text-left">
+      <div className={`w-full mt-6 flex items-start gap-3 bg-white/40 p-4 rounded-2xl border transition-all duration-300 text-left ${shakeLandingCheckbox ? 'shake border-red-400 bg-red-50/20 shadow-md shadow-red-100' : 'border-moss/5'}`}>
         <input 
           id="gdpr-consent-landing"
           type="checkbox"
           checked={landingConsentChecked}
-          onChange={e => setLandingConsentChecked(e.target.checked)}
+          onChange={e => { setLandingConsentChecked(e.target.checked); if (error && error.includes("Privacy Policy")) setError(null); }}
           className="mt-1 h-4.5 w-4.5 accent-moss rounded cursor-pointer shrink-0"
         />
         <label htmlFor="gdpr-consent-landing" className="text-xs text-stone/70 leading-relaxed cursor-pointer select-none">
@@ -107,7 +121,7 @@ const Onboarding: React.FC = () => {
 
       <p className="mt-6 text-sm text-stone/70 text-center">
         Already have an account?{' '}
-        <button onClick={() => { setError(null); setMode('login'); }} className="font-bold text-moss hover:underline">
+        <button onClick={() => { setError(null); setMode('login'); }} className="font-bold text-moss hover:underline cursor-pointer">
           Log in
         </button>
       </p>
@@ -119,7 +133,7 @@ const Onboarding: React.FC = () => {
       <button 
         type="button"
         onClick={() => { setError(null); setMode('landing'); }}
-        className="self-start flex items-center gap-2 text-sm text-stone/60 hover:text-moss mb-2"
+        className="self-start flex items-center gap-2 text-sm text-stone/60 hover:text-moss mb-2 cursor-pointer"
       >
         <ArrowLeft size={16} /> Back
       </button>
@@ -160,12 +174,12 @@ const Onboarding: React.FC = () => {
       </div>
 
       {mode === 'signup' && (
-        <div className="w-full mt-2 mb-2 flex items-start gap-3 bg-white/40 p-4 rounded-2xl border border-moss/5 text-left">
+        <div className={`w-full mt-2 mb-2 flex items-start gap-3 bg-white/40 p-4 rounded-2xl border transition-all duration-300 text-left ${shakeSignupCheckbox ? 'shake border-red-400 bg-red-50/20 shadow-md shadow-red-100' : 'border-moss/5'}`}>
           <input 
             id="gdpr-consent-signup"
             type="checkbox"
             checked={signupConsentChecked}
-            onChange={e => setSignupConsentChecked(e.target.checked)}
+            onChange={e => { setSignupConsentChecked(e.target.checked); if (error && error.includes("Privacy Policy")) setError(null); }}
             className="mt-1 h-4.5 w-4.5 accent-moss rounded cursor-pointer shrink-0"
           />
           <label htmlFor="gdpr-consent-signup" className="text-xs text-stone/70 leading-relaxed cursor-pointer select-none">
@@ -180,8 +194,8 @@ const Onboarding: React.FC = () => {
       <button 
         id="email-submit-btn"
         type="submit"
-        disabled={loading || (mode === 'signup' && !signupConsentChecked)}
-        className="w-full flex items-center justify-center bg-moss text-white hover:bg-moss/90 font-bold py-4 rounded-2xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed mt-2"
+        disabled={loading}
+        className="w-full flex items-center justify-center bg-moss text-white hover:bg-moss/90 font-bold py-4 rounded-2xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed mt-2 cursor-pointer"
       >
         {loading ? 'Please wait...' : mode === 'login' ? 'Log In' : 'Sign Up'}
       </button>
@@ -191,7 +205,7 @@ const Onboarding: React.FC = () => {
         <button 
           type="button"
           onClick={() => { setError(null); setMode(mode === 'login' ? 'signup' : 'login'); }} 
-          className="font-bold text-moss hover:underline"
+          className="font-bold text-moss hover:underline cursor-pointer"
         >
           {mode === 'login' ? 'Sign up' : 'Log in'}
         </button>
