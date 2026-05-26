@@ -10,7 +10,23 @@ import { Plant } from '../types';
 export const requestNotificationPermission = async (): Promise<boolean> => {
   if (Capacitor.isNativePlatform()) {
     const { display } = await LocalNotifications.requestPermissions();
-    return display === 'granted';
+    if (display === 'granted') {
+      try {
+        // Register the Care Reminders notification channel with high importance
+        await LocalNotifications.createChannel({
+          id: 'care-reminders',
+          name: 'Care Reminders',
+          description: 'Notifications for watering, fertilizing, and pruning schedules.',
+          importance: 4, // High importance triggers heads-up banner & system chime
+          visibility: 1, // Visible on the lockscreen
+          vibration: true,
+        });
+      } catch (e) {
+        console.warn("Could not register Care Reminders channel:", e);
+      }
+      return true;
+    }
+    return false;
   } else {
     // Web fallback
     if (!('Notification' in window)) {
@@ -33,14 +49,17 @@ export const scheduleWateringNotification = async (plant: Plant, enabled: boolea
 
   // Only schedule if the time is in the future
   if (nextWaterTime.getTime() > now.getTime()) {
+    const wateringMessage = `Time to hydrate! 💧 Your ${plant.commonName} needs some water.`;
+
     if (Capacitor.isNativePlatform()) {
       await LocalNotifications.schedule({
         notifications: [
           {
             title: 'Watering Reminder',
-            body: `Your ${plant.commonName} needs water!`,
+            body: wateringMessage,
             id: getNotificationId(plant.id, 'watering'),
             schedule: { at: nextWaterTime },
+            channelId: 'care-reminders',
             sound: undefined,
             attachments: null,
             actionTypeId: '',
@@ -57,7 +76,7 @@ export const scheduleWateringNotification = async (plant: Plant, enabled: boolea
         setTimeout(() => {
           if (Notification.permission === 'granted') {
             new Notification('Watering Reminder', {
-              body: `Your ${plant.commonName} needs water!`,
+              body: wateringMessage,
               icon: '/favicon.ico',
             });
           }
@@ -94,15 +113,18 @@ export const scheduleSeasonalNotification = async (plant: Plant, type: 'fertiliz
 
   if (nextTime.getTime() > now.getTime()) {
     const title = type === 'fertilizing' ? 'Fertilizing Reminder' : 'Pruning Reminder';
-    const action = type === 'fertilizing' ? 'needs fertilizer' : 'needs pruning';
+    const bodyText = type === 'fertilizing'
+      ? `Feed me! 🌱 Your ${plant.commonName} is ready for its fertilizer.`
+      : `Time for a haircut! ✂️ Your ${plant.commonName} needs some pruning.`;
     
     if (Capacitor.isNativePlatform()) {
       await LocalNotifications.schedule({
         notifications: [{
           title,
-          body: `Your ${plant.commonName} ${action}!`,
+          body: bodyText,
           id: getNotificationId(plant.id, type),
           schedule: { at: nextTime },
+          channelId: 'care-reminders',
         }]
       });
     } else {
@@ -110,7 +132,7 @@ export const scheduleSeasonalNotification = async (plant: Plant, type: 'fertiliz
       if (delay < 2147483647) {
         setTimeout(() => {
           if (Notification.permission === 'granted') {
-            new Notification(title, { body: `Your ${plant.commonName} ${action}!`, icon: '/favicon.ico' });
+            new Notification(title, { body: bodyText, icon: '/favicon.ico' });
           }
         }, delay);
       }
