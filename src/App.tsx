@@ -1520,7 +1520,7 @@ function AppContent() {
           id="add-plant-fab"
           aria-label="Add new plant"
           onClick={() => setView('add')}
-          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-terracotta text-white px-6 py-3.5 rounded-full shadow-2xl shadow-terracotta/30 hover:scale-105 active:scale-95 transition-transform font-bold text-sm"
+          className="fixed bottom-add-plant left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-terracotta text-white px-6 py-3.5 rounded-full shadow-2xl shadow-terracotta/30 hover:scale-105 active:scale-95 transition-transform font-bold text-sm cursor-pointer"
         >
           <Plus size={20} strokeWidth={2.5} />
           Add Plant
